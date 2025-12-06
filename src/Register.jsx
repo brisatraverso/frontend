@@ -39,7 +39,7 @@ export default function Register({ onNavigate }) {
     backgroundRepeat: "no-repeat",color: "#fff"
     }}>
       <Card sx={{ p: 4, bgcolor: "#111827", width: 350 }}>
-        <Typography variant="h4" gutterBottom sx={{ color: "#fff" }}>
+        <Typography variant="h5" sx={{ mb: 3, textAlign: "center", color: "#fff", fontWeight: 600 }}>
          Crear cuenta
         </Typography>
 
