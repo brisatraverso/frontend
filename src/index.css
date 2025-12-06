@@ -1,30 +1,55 @@
 @import "leaflet/dist/leaflet.css";
 
-html, body, #root {
-  height: 100%;
+/* ---- RESET MODERNO ---- */
+* {
+  box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-/* Fuerza a que NINGÚN contenedor use flexbox por defecto */
-body {
-  display: block !important;
-}
-
-/* Asegura que root ocupa toda la pantalla */
+/* ---- TEMA OSCURO ---- */
+html,
+body,
 #root {
   height: 100%;
   width: 100%;
+  background: #0d1117;
+  color: #e6e8eb;
+  font-family: "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Asegura que App también ocupa todo */
+/* Asegura que body NO use flex por defecto */
+body {
+  display: block !important;
+  overflow: hidden;
+}
+
+/* ---- CONTENEDOR APP ---- */
 .App {
   height: 100%;
   width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Leaflet necesita tamaño explícito */
+/* ---- MAPA LEAFLET ---- */
 .leaflet-container {
   height: 100% !important;
   width: 100% !important;
+  background: #0d1117 !important;
+}
+
+/* Scroll suave para listas del historial */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2d333b;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
 }
