@@ -33,11 +33,15 @@ export default function Register({ onNavigate }) {
 
   return (
     <Box sx={{
-      height: "100vh", display: "flex", justifyContent: "center",
-      alignItems: "center", bgcolor: "#0d1117", color: "#fff"
+    height: "100vh", display: "flex", justifyContent: "center",
+    alignItems: "center", backgroundImage: "url('/src/assets/fondo.png')",
+    backgroundSize: "cover", backgroundPosition: "center", 
+    backgroundRepeat: "no-repeat",color: "#fff"
     }}>
       <Card sx={{ p: 4, bgcolor: "#111827", width: 350 }}>
-        <Typography variant="h5" sx={{ mb: 3 }}>Crear cuenta</Typography>
+        <Typography variant="h4" gutterBottom sx={{ color: "#fff" }}>
+         Crear cuenta
+        </Typography>
 
         <TextField
           fullWidth
@@ -45,6 +49,8 @@ export default function Register({ onNavigate }) {
           variant="filled"
           sx={{ mb: 2 }}
           onChange={(e) => setEmail(e.target.value)}
+          InputLabelProps={{ style: { color: "#fff" } }}
+          inputProps={{ style: { color: "#fff" } }}
         />
 
         <TextField
@@ -52,8 +58,13 @@ export default function Register({ onNavigate }) {
           type="password"
           label="Contraseña"
           variant="filled"
-          sx={{ mb: 3 }}
+          sx={{ 
+            mb: 2,
+            bgcolor: "#1f2937",
+            borderRadius: 1,}}
           onChange={(e) => setPass(e.target.value)}
+          InputLabelProps={{ style: { color: "#fff" } }}
+          inputProps={{ style: { color: "#fff" } }}
         />
 
         {err && <Typography sx={{ color: "red", mb: 2 }}>{err}</Typography>}

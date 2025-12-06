@@ -212,8 +212,8 @@ export default function App() {
           onClick={() => signOut(auth)}
           variant="contained"
           sx={{
-            bgcolor: "#dc2626",
-            ":hover": { bgcolor: "#b91c1c" }
+            bgcolor: "#321892ff",
+            ":hover": { bgcolor: "#321892ff" }
           }}
         >
           Cerrar sesión

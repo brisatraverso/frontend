@@ -40,7 +40,11 @@ export default function ResetPassword({ onNavigate }) {
       display: "flex",
       justifyContent: "center",
       alignItems: "center",
-      bgcolor: "#0d1117"
+      backgroundImage: "url('/src/assets/fondo.png')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+
     }}>
       <Card sx={{
         width: 350,

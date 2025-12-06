@@ -38,7 +38,11 @@ export default function Login({ onNavigate }) {
       display: "flex",
       justifyContent: "center",
       alignItems: "center",
-      bgcolor: "#0d1117"
+      backgroundImage: "url('/src/assets/fondo.png')",
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      backgroundRepeat: "no-repeat",
+
     }}>
       <Card sx={{
         width: 350,
@@ -48,7 +52,7 @@ export default function Login({ onNavigate }) {
         boxShadow: "0px 0px 20px rgba(0,0,0,0.5)",
         borderRadius: 3
       }}>
-        <Typography variant="h5" sx={{ mb: 3, textAlign: "center", fontWeight: 600 }}>
+        <Typography variant="h5" sx={{ mb: 3, textAlign: "center", color: "#fff", fontWeight: 600 }}>
           Iniciar sesión
         </Typography>
 
