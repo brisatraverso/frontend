@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { db } from "./firebase";
 import { ref, onValue } from "firebase/database";
-import { Box, Typography, List, ListItemButton } from "@mui/material";
+import {
+  Box,
+  Typography,
+  List,
+  ListItemButton,
+  Card,
+  CardContent
+} from "@mui/material";
 
 export default function Historial({ onSelectDate }) {
   const [fechas, setFechas] = useState([]);
@@ -12,7 +19,7 @@ export default function Historial({ onSelectDate }) {
     onValue(histRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        const keys = Object.keys(data);
+        const keys = Object.keys(data).sort();
         setFechas(keys);
       } else {
         setFechas([]);
@@ -21,7 +28,16 @@ export default function Historial({ onSelectDate }) {
   }, []);
 
   return (
-    <Box sx={{ color: "#fff" }}>
+    <Box
+      sx={{
+        color: "#fff",
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
+        height: "100%",
+        overflowY: "auto"
+      }}
+    >
       <Typography variant="h6" sx={{ mb: 2 }}>
         Seleccioná una fecha
       </Typography>
@@ -32,7 +48,7 @@ export default function Historial({ onSelectDate }) {
         </Typography>
       )}
 
-      <List>
+      <List sx={{ width: "100%" }}>
         {fechas.map((f) => (
           <ListItemButton
             key={f}
@@ -41,7 +57,8 @@ export default function Historial({ onSelectDate }) {
               background: "#1f2937",
               mb: 1,
               borderRadius: "8px",
-              ":hover": { background: "#374151" }
+              ":hover": { background: "#374151" },
+              color: "#fff"
             }}
           >
             {f}
