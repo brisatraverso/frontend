@@ -77,8 +77,8 @@ export default function App() {
   const [tab, setTab] = useState("live");
   const [position, setPosition] = useState(null);
   const [path, setPath] = useState([]);
-
   const [histPath, setHistPath] = useState([]);
+
   const [showStats, setShowStats] = useState(false);
 
   const [stats, setStats] = useState({
@@ -89,7 +89,7 @@ export default function App() {
     stop: 0
   });
 
-  /* ================= RESET AL VOLVER A LIVE ================= */
+  /* ================= CAMBIO DE TAB ================= */
   useEffect(() => {
     if (tab === "live") {
       setHistPath([]);
@@ -204,53 +204,28 @@ export default function App() {
         </Tabs>
       </AppBar>
 
-      <Box sx={{ height: "calc(100vh - 64px)", position: "relative" }}>
-        <MapContainer
-          center={defaultPosition}
-          zoom={15}
-          style={{ height: "100%", width: "100%" }}
+      <Box sx={{ display: "flex", height: "calc(100vh - 64px)" }}>
+        {/* SIDEBAR DESKTOP */}
+        <Box
+          sx={{
+            width: 320,
+            display: { xs: "none", md: "block" },
+            bgcolor: "#0f172a",
+            p: 2,
+            overflowY: "auto"
+          }}
         >
-          <FixMapResize />
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          {tab === "history" && <Historial onSelect={loadHistory} />}
 
-          {position && (
-            <Marker position={position} icon={markerIcon}>
-              <Popup>
-                {position[0].toFixed(5)}, {position[1].toFixed(5)}
-              </Popup>
-            </Marker>
-          )}
-
-          {path.length > 1 && tab === "live" && <Polyline positions={path} />}
-          {histPath.length > 1 && tab === "history" && (
-            <Polyline positions={histPath} />
-          )}
-        </MapContainer>
-
-        {/* PANEL STATS */}
-        {showStats && (
-          <Box
-            sx={{
-              position: "absolute",
-              bottom: 0,
-              left: 0,
-              right: 0,
-              maxHeight: "45%",
-              bgcolor: "#0f172a",
-              borderTopLeftRadius: 16,
-              borderTopRightRadius: 16,
-              p: 2,
-              overflowY: "auto"
-            }}
-          >
-            {[
+          {showStats &&
+            [
               ["Distancia", `${stats.dist.toFixed(2)} km`],
               ["Vel máx", `${stats.velMax.toFixed(1)} km/h`],
               ["Vel prom", `${stats.velProm.toFixed(1)} km/h`],
               ["Movimiento", `${(stats.mov / 60).toFixed(1)} min`],
               ["Detenido", `${(stats.stop / 60).toFixed(1)} min`]
             ].map(([t, v]) => (
-              <Card key={t} sx={{ bgcolor: "#1f2937", mb: 1, color: "#fff" }}>
+              <Card key={t} sx={{ bgcolor: "#1f2937", mb: 1 }}>
                 <CardContent>
                   <Typography color="#fff">{t}</Typography>
                   <Typography variant="h5" color="#fff">
@@ -259,26 +234,83 @@ export default function App() {
                 </CardContent>
               </Card>
             ))}
-          </Box>
-        )}
+        </Box>
 
-        {/* FAB */}
-        <Fab
-          sx={{ position: "absolute", bottom: 16, right: 16 }}
-          onClick={() => setShowStats((s) => !s)}
-        >
-          📊
-        </Fab>
+        {/* MAPA */}
+        <Box sx={{ flex: 1, position: "relative" }}>
+          <MapContainer
+            center={defaultPosition}
+            zoom={15}
+            style={{ height: "100%", width: "100%" }}
+          >
+            <FixMapResize />
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            {position && (
+              <Marker position={position} icon={markerIcon}>
+                <Popup>
+                  {position[0].toFixed(5)}, {position[1].toFixed(5)}
+                </Popup>
+              </Marker>
+            )}
+            {tab === "live" && path.length > 1 && <Polyline positions={path} />}
+            {tab === "history" && histPath.length > 1 && (
+              <Polyline positions={histPath} />
+            )}
+          </MapContainer>
 
-        {/* LOGOUT */}
-        <Button
-          onClick={() => signOut(auth)}
-          sx={{ position: "absolute", top: 10, right: 10 }}
-          variant="contained"
-        >
-          Cerrar sesión
-        </Button>
+          {/* PANEL MOBILE */}
+          {showStats && (
+            <Box
+              sx={{
+                display: { xs: "block", md: "none" },
+                position: "absolute",
+                bottom: 0,
+                left: 0,
+                right: 0,
+                maxHeight: "45%",
+                bgcolor: "#0f172a",
+                borderTopLeftRadius: 16,
+                borderTopRightRadius: 16,
+                p: 2,
+                overflowY: "auto"
+              }}
+            >
+              {[
+                ["Distancia", `${stats.dist.toFixed(2)} km`],
+                ["Vel máx", `${stats.velMax.toFixed(1)} km/h`],
+                ["Vel prom", `${stats.velProm.toFixed(1)} km/h`],
+                ["Movimiento", `${(stats.mov / 60).toFixed(1)} min`],
+                ["Detenido", `${(stats.stop / 60).toFixed(1)} min`]
+              ].map(([t, v]) => (
+                <Card key={t} sx={{ bgcolor: "#1f2937", mb: 1 }}>
+                  <CardContent>
+                    <Typography color="#fff">{t}</Typography>
+                    <Typography variant="h5" color="#fff">
+                      {v}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              ))}
+            </Box>
+          )}
+
+          {/* FAB */}
+          <Fab
+            sx={{ position: "absolute", bottom: 16, right: 16 }}
+            onClick={() => setShowStats((s) => !s)}
+          >
+            📊
+          </Fab>
+        </Box>
       </Box>
+
+      <Button
+        onClick={() => signOut(auth)}
+        sx={{ position: "fixed", top: 10, right: 10 }}
+        variant="contained"
+      >
+        Cerrar sesión
+      </Button>
     </Box>
   );
 }
