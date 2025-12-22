@@ -54,7 +54,6 @@ function FixMapResize() {
 
 const defaultPosition = [-32.48, -58.23];
 
-/* ================= DISTANCIA ================= */
 function haversine(lat1, lon1, lat2, lon2) {
   const R = 6371e3;
   const p = Math.PI / 180;
@@ -71,19 +70,14 @@ function haversine(lat1, lon1, lat2, lon2) {
 export default function App() {
   const isDesktop = useMediaQuery("(min-width:900px)");
 
-  /* ================= AUTH ================= */
   const [user, setUser] = useState(undefined);
   const [screen, setScreen] = useState("login");
 
-  useEffect(() => onAuthStateChanged(auth, setUser), []);
-
-  /* ================= ESTADOS ================= */
   const [tab, setTab] = useState("live");
+
   const [position, setPosition] = useState(null);
   const [path, setPath] = useState([]);
-
   const [histPath, setHistPath] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(null);
 
   const [totalDist, setTotalDist] = useState(0);
   const [velMax, setVelMax] = useState(0);
@@ -92,29 +86,33 @@ export default function App() {
   const [tiempoDetenido, setTiempoDetenido] = useState(0);
 
   const [showStats, setShowStats] = useState(false);
+  const [showHistoryList, setShowHistoryList] = useState(false);
 
-  /* ================= RESET LIVE ================= */
+  useEffect(() => onAuthStateChanged(auth, setUser), []);
+
+  /* ================= CAMBIO DE TAB ================= */
   useEffect(() => {
-    if (tab === "live") {
-      setHistPath([]);
-      setSelectedDate(null);
+    if (tab === "history") {
       setShowStats(false);
+      setShowHistoryList(true);
+      setPath([]);
+    } else {
+      setShowStats(isDesktop);
+      setShowHistoryList(false);
+      setHistPath([]);
     }
-  }, [tab]);
+  }, [tab, isDesktop]);
 
   /* ================= LIVE ================= */
   useEffect(() => {
     if (tab !== "live") return;
 
-    let lastPos = null;
     const unsub = onValue(ref(db, "vehiculo1"), snap => {
       const d = snap.val();
       if (!d?.lat || !d?.lng) return;
-
       const pos = [d.lat, d.lng];
       setPosition(pos);
       setPath(p => [...p, pos]);
-      lastPos = pos;
     });
 
     return () => unsub();
@@ -122,9 +120,8 @@ export default function App() {
 
   /* ================= HISTORIAL ================= */
   const loadHistory = fecha => {
-    setSelectedDate(fecha);
+    setShowHistoryList(false);
     setShowStats(true);
-    setTab("history");
 
     onValue(ref(db, `historial/vehiculo1/${fecha}`), snap => {
       const data = snap.val();
@@ -144,7 +141,6 @@ export default function App() {
         const p2 = puntos[i];
         const d = haversine(p1.lat, p1.lng, p2.lat, p2.lng);
         dist += d;
-
         const dt = (p2.timestamp - p1.timestamp) / 1000;
         if (dt > 0) {
           const v = (d / dt) * 3.6;
@@ -161,8 +157,7 @@ export default function App() {
     });
   };
 
-  /* ================= LOADING ================= */
-  if (user === undefined) return <Box sx={{ height: "100vh" }} />;
+  if (user === undefined) return null;
 
   if (!user)
     return (
@@ -173,29 +168,22 @@ export default function App() {
       </>
     );
 
-  const showStatsPanel = isDesktop || showStats;
-
-  /* ================= UI ================= */
   return (
     <Box sx={{ height: "100vh", bgcolor: "#0d1117", color: "#fff" }}>
       <AppBar sx={{ bgcolor: "#111827" }}>
-        <Tabs value={tab} onChange={(e, v) => setTab(v)} centered>
+        <Tabs value={tab} onChange={(e, v) => setTab(v)} centered textColor="inherit">
           <Tab label="En vivo" value="live" />
           <Tab label="Historial" value="history" />
         </Tabs>
       </AppBar>
 
       <Box sx={{ display: "flex", height: "calc(100vh - 64px)" }}>
-        {/* STATS */}
-        {showStatsPanel && (
+        {/* SIDEBAR STATS */}
+        {showStats && (
           <Box
             sx={{
-              width: { xs: "100%", md: 300 },
-              position: { xs: "absolute", md: "relative" },
-              bottom: 0,
-              height: { xs: "40vh", md: "100%" },
+              width: 300,
               bgcolor: "#0f172a",
-              zIndex: 1000,
               p: 2,
               overflowY: "auto"
             }}
@@ -207,19 +195,37 @@ export default function App() {
               ["Movimiento", `${(tiempoMovimiento / 60).toFixed(1)} min`],
               ["Detenido", `${(tiempoDetenido / 60).toFixed(1)} min`]
             ].map(([t, v]) => (
-              <Card key={t} sx={{ bgcolor: "#1f2937", mb: 1 }}>
+              <Card key={t} sx={{ bgcolor: "#1f2937", mb: 1, color: "#fff" }}>
                 <CardContent>
-                  <Typography>{t}</Typography>
-                  <Typography variant="h5">{v}</Typography>
+                  <Typography color="white">{t}</Typography>
+                  <Typography variant="h5" color="white">
+                    {v}
+                  </Typography>
                 </CardContent>
               </Card>
             ))}
+
+            {tab === "history" && (
+              <Button
+                fullWidth
+                variant="outlined"
+                sx={{ mt: 1, color: "#fff", borderColor: "#fff" }}
+                onClick={() => {
+                  setShowStats(false);
+                  setShowHistoryList(true);
+                }}
+              >
+                Volver a fechas
+              </Button>
+            )}
           </Box>
         )}
 
         {/* MAPA + HISTORIAL */}
-        <Box sx={{ flex: 1 }}>
-          {tab === "history" && <Historial onSelectDate={loadHistory} />}
+        <Box sx={{ flex: 1, position: "relative" }}>
+          {showHistoryList && (
+            <Historial onSelectDate={loadHistory} />
+          )}
 
           <MapContainer
             center={defaultPosition}
@@ -229,14 +235,7 @@ export default function App() {
             <FixMapResize />
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
-            {position && (
-              <Marker position={position} icon={markerIcon}>
-                <Popup>
-                  {position[0].toFixed(5)}, {position[1].toFixed(5)}
-                </Popup>
-              </Marker>
-            )}
-
+            {position && <Marker position={position} icon={markerIcon} />}
             {path.length > 1 && <Polyline positions={path} />}
             {histPath.length > 1 && <Polyline positions={histPath} />}
           </MapContainer>
@@ -246,7 +245,6 @@ export default function App() {
       {/* FAB MOBILE */}
       {!isDesktop && (
         <Fab
-          color="primary"
           sx={{ position: "fixed", bottom: 16, right: 16 }}
           onClick={() => setShowStats(s => !s)}
         >
@@ -254,7 +252,6 @@ export default function App() {
         </Fab>
       )}
 
-      {/* LOGOUT */}
       <Button
         onClick={() => signOut(auth)}
         sx={{ position: "fixed", top: 10, right: 10 }}
