@@ -28,9 +28,7 @@ import {
   Typography,
   Box,
   Button,
-  Fab,
-  useTheme,
-  useMediaQuery
+  Fab
 } from "@mui/material";
 
 /* ================= ICONO ================= */
@@ -68,18 +66,7 @@ function haversine(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.asin(Math.sqrt(a));
 }
 
-function ChangeView({ center }) {
-  const map = useMap();
-  useEffect(() => {
-    if (center) map.setView(center, 16);
-  }, [center]);
-  return null;
-}
-
 export default function App() {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-
   /* ================= AUTH ================= */
   const [user, setUser] = useState(undefined);
   const [screen, setScreen] = useState("login");
@@ -90,64 +77,94 @@ export default function App() {
   const [tab, setTab] = useState("live");
   const [position, setPosition] = useState(null);
   const [path, setPath] = useState([]);
-  const [velocidadActual, setVelocidadActual] = useState(0);
 
   const [histPath, setHistPath] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(null);
-
-  const [totalDist, setTotalDist] = useState(0);
-  const [velMax, setVelMax] = useState(0);
-  const [velProm, setVelProm] = useState(0);
-  const [tiempoMovimiento, setTiempoMovimiento] = useState(0);
-  const [tiempoDetenido, setTiempoDetenido] = useState(0);
-
   const [showStats, setShowStats] = useState(false);
+
+  const [stats, setStats] = useState({
+    dist: 0,
+    velMax: 0,
+    velProm: 0,
+    mov: 0,
+    stop: 0
+  });
+
+  /* ================= RESET AL VOLVER A LIVE ================= */
+  useEffect(() => {
+    if (tab === "live") {
+      setHistPath([]);
+      setStats({
+        dist: 0,
+        velMax: 0,
+        velProm: 0,
+        mov: 0,
+        stop: 0
+      });
+    }
+  }, [tab]);
 
   /* ================= LIVE ================= */
   useEffect(() => {
     if (tab !== "live") return;
-    let lastPos = null;
+
+    let last = null;
+    let dist = 0;
+    let vels = [];
 
     return onValue(ref(db, "vehiculo1"), (snap) => {
       const d = snap.val();
       if (!d?.lat || !d?.lng) return;
 
-      const newPos = [d.lat, d.lng];
-      if (lastPos) {
-        const v = haversine(...lastPos, ...newPos) * 3.6;
-        setVelocidadActual(v);
+      const pos = [d.lat, d.lng];
+      if (last) {
+        const dKm = haversine(...last, ...pos) / 1000;
+        dist += dKm;
+        const v = dKm * 3600;
+        vels.push(v);
       }
-      lastPos = newPos;
-      setPosition(newPos);
-      setPath((p) => [...p, newPos]);
+
+      last = pos;
+      setPosition(pos);
+      setPath((p) => [...p, pos]);
+
+      setStats({
+        dist,
+        velMax: Math.max(...vels, 0),
+        velProm: vels.length ? vels.reduce((a, b) => a + b) / vels.length : 0,
+        mov: 0,
+        stop: 0
+      });
     });
   }, [tab]);
 
   /* ================= HISTORIAL ================= */
   const loadHistory = (fecha) => {
-    setSelectedDate(fecha);
-    setShowStats(true);
     setTab("history");
+    setShowStats(true);
 
     onValue(ref(db, `historial/vehiculo1/${fecha}`), (snap) => {
       const data = snap.val();
       if (!data) return;
 
-      const puntos = Object.values(data);
-      setHistPath(puntos.map((p) => [p.lat, p.lng]));
+      const pts = Object.values(data);
+      const coords = pts.map((p) => [p.lat, p.lng]);
+      setHistPath(coords);
 
       let dist = 0;
       let vels = [];
       let mov = 0;
       let stop = 0;
 
-      for (let i = 1; i < puntos.length; i++) {
-        const p1 = puntos[i - 1];
-        const p2 = puntos[i];
-        const d = haversine(p1.lat, p1.lng, p2.lat, p2.lng);
+      for (let i = 1; i < pts.length; i++) {
+        const d = haversine(
+          pts[i - 1].lat,
+          pts[i - 1].lng,
+          pts[i].lat,
+          pts[i].lng
+        );
         dist += d;
 
-        const dt = (p2.timestamp - p1.timestamp) / 1000;
+        const dt = (pts[i].timestamp - pts[i - 1].timestamp) / 1000;
         if (dt > 0) {
           const v = (d / dt) * 3.6;
           vels.push(v);
@@ -155,15 +172,19 @@ export default function App() {
         }
       }
 
-      setTotalDist(dist / 1000);
-      setVelMax(Math.max(...vels, 0));
-      setVelProm(vels.length ? vels.reduce((a, b) => a + b) / vels.length : 0);
-      setTiempoMovimiento(mov);
-      setTiempoDetenido(stop);
+      setStats({
+        dist: dist / 1000,
+        velMax: Math.max(...vels, 0),
+        velProm: vels.length ? vels.reduce((a, b) => a + b) / vels.length : 0,
+        mov,
+        stop
+      });
     });
   };
 
+  /* ================= LOADING ================= */
   if (user === undefined) return null;
+
   if (!user)
     return (
       <>
@@ -173,15 +194,7 @@ export default function App() {
       </>
     );
 
-  const stats = [
-    ["Velocidad actual", `${velocidadActual.toFixed(1)} km/h`],
-    ["Distancia", `${totalDist.toFixed(2)} km`],
-    ["Vel máx", `${velMax.toFixed(1)} km/h`],
-    ["Vel prom", `${velProm.toFixed(1)} km/h`],
-    ["Movimiento", `${(tiempoMovimiento / 60).toFixed(1)} min`],
-    ["Detenido", `${(tiempoDetenido / 60).toFixed(1)} min`]
-  ];
-
+  /* ================= UI ================= */
   return (
     <Box sx={{ height: "100vh", bgcolor: "#0d1117", color: "#fff" }}>
       <AppBar sx={{ bgcolor: "#111827" }}>
@@ -191,25 +204,56 @@ export default function App() {
         </Tabs>
       </AppBar>
 
-      <Box sx={{ display: "flex", height: "calc(100vh - 64px)" }}>
-        {/* STATS */}
+      <Box sx={{ height: "calc(100vh - 64px)", position: "relative" }}>
+        <MapContainer
+          center={defaultPosition}
+          zoom={15}
+          style={{ height: "100%", width: "100%" }}
+        >
+          <FixMapResize />
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+
+          {position && (
+            <Marker position={position} icon={markerIcon}>
+              <Popup>
+                {position[0].toFixed(5)}, {position[1].toFixed(5)}
+              </Popup>
+            </Marker>
+          )}
+
+          {path.length > 1 && tab === "live" && <Polyline positions={path} />}
+          {histPath.length > 1 && tab === "history" && (
+            <Polyline positions={histPath} />
+          )}
+        </MapContainer>
+
+        {/* PANEL STATS */}
         {showStats && (
           <Box
             sx={{
-              width: isMobile ? "100%" : 300,
-              height: isMobile ? "40vh" : "100%",
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              maxHeight: "45%",
               bgcolor: "#0f172a",
+              borderTopLeftRadius: 16,
+              borderTopRightRadius: 16,
               p: 2,
               overflowY: "auto"
             }}
           >
-            {stats.map(([t, v]) => (
-              <Card key={t} sx={{ bgcolor: "#1f2937", mb: 1 }}>
+            {[
+              ["Distancia", `${stats.dist.toFixed(2)} km`],
+              ["Vel máx", `${stats.velMax.toFixed(1)} km/h`],
+              ["Vel prom", `${stats.velProm.toFixed(1)} km/h`],
+              ["Movimiento", `${(stats.mov / 60).toFixed(1)} min`],
+              ["Detenido", `${(stats.stop / 60).toFixed(1)} min`]
+            ].map(([t, v]) => (
+              <Card key={t} sx={{ bgcolor: "#1f2937", mb: 1, color: "#fff" }}>
                 <CardContent>
-                  <Typography sx={{ color: "#fff", opacity: 0.8 }}>
-                    {t}
-                  </Typography>
-                  <Typography variant="h5" sx={{ color: "#fff" }}>
+                  <Typography color="#fff">{t}</Typography>
+                  <Typography variant="h5" color="#fff">
                     {v}
                   </Typography>
                 </CardContent>
@@ -218,58 +262,23 @@ export default function App() {
           </Box>
         )}
 
-        {/* HISTORIAL */}
-        {tab === "history" && !showStats && (
-          <Box sx={{ width: 320, bgcolor: "#0f172a", p: 2 }}>
-            <Historial onSelectDate={loadHistory} />
-          </Box>
-        )}
+        {/* FAB */}
+        <Fab
+          sx={{ position: "absolute", bottom: 16, right: 16 }}
+          onClick={() => setShowStats((s) => !s)}
+        >
+          📊
+        </Fab>
 
-        {/* MAPA */}
-        <Box sx={{ flex: 1 }}>
-          <MapContainer
-            center={defaultPosition}
-            zoom={15}
-            style={{ height: "100%", width: "100%" }}
-          >
-            <FixMapResize />
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-
-            {position && tab === "live" && (
-              <>
-                <ChangeView center={position} />
-                <Marker position={position} icon={markerIcon}>
-                  <Popup>
-                    {position[0].toFixed(5)}, {position[1].toFixed(5)}
-                  </Popup>
-                </Marker>
-                {path.length > 1 && <Polyline positions={path} />}
-              </>
-            )}
-
-            {tab === "history" && histPath.length > 1 && (
-              <Polyline positions={histPath} />
-            )}
-          </MapContainer>
-        </Box>
+        {/* LOGOUT */}
+        <Button
+          onClick={() => signOut(auth)}
+          sx={{ position: "absolute", top: 10, right: 10 }}
+          variant="contained"
+        >
+          Cerrar sesión
+        </Button>
       </Box>
-
-      {/* FAB */}
-      <Fab
-        sx={{ position: "fixed", bottom: 16, right: 16 }}
-        color="primary"
-        onClick={() => setShowStats((s) => !s)}
-      >
-        📊
-      </Fab>
-
-      <Button
-        onClick={() => signOut(auth)}
-        sx={{ position: "fixed", top: 10, right: 10 }}
-        variant="contained"
-      >
-        Cerrar sesión
-      </Button>
     </Box>
   );
 }
