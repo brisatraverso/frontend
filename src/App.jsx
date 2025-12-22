@@ -11,7 +11,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
 import { db, auth } from "./firebase";
-import { ref, onValue, off } from "firebase/database";
+import { ref, onValue } from "firebase/database";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 
 import Historial from "./Historial";
@@ -77,8 +77,8 @@ export default function App() {
   const [tab, setTab] = useState("live");
   const [position, setPosition] = useState(null);
   const [path, setPath] = useState([]);
-  const [histPath, setHistPath] = useState([]);
 
+  const [histPath, setHistPath] = useState([]);
   const [showStats, setShowStats] = useState(false);
 
   const [stats, setStats] = useState({
@@ -89,9 +89,18 @@ export default function App() {
     stop: 0
   });
 
-  /* ================= RESET AL CAMBIAR TAB ================= */
+  /* ================= RESET AL VOLVER A LIVE ================= */
   useEffect(() => {
-    setShowStats(false);
+    if (tab === "live") {
+      setHistPath([]);
+      setStats({
+        dist: 0,
+        velMax: 0,
+        velProm: 0,
+        mov: 0,
+        stop: 0
+      });
+    }
   }, [tab]);
 
   /* ================= LIVE ================= */
@@ -102,14 +111,11 @@ export default function App() {
     let dist = 0;
     let vels = [];
 
-    const r = ref(db, "vehiculo1");
-
-    onValue(r, (snap) => {
+    return onValue(ref(db, "vehiculo1"), (snap) => {
       const d = snap.val();
       if (!d?.lat || !d?.lng) return;
 
       const pos = [d.lat, d.lng];
-
       if (last) {
         const dKm = haversine(...last, ...pos) / 1000;
         dist += dKm;
@@ -129,17 +135,14 @@ export default function App() {
         stop: 0
       });
     });
-
-    return () => off(r);
   }, [tab]);
 
   /* ================= HISTORIAL ================= */
   const loadHistory = (fecha) => {
+    setTab("history");
     setShowStats(true);
 
-    const r = ref(db, `historial/vehiculo1/${fecha}`);
-
-    onValue(r, (snap) => {
+    onValue(ref(db, `historial/vehiculo1/${fecha}`), (snap) => {
       const data = snap.val();
       if (!data) return;
 
@@ -201,16 +204,41 @@ export default function App() {
         </Tabs>
       </AppBar>
 
-      <Box sx={{ display: "flex", height: "calc(100vh - 64px)" }}>
-        {/* SIDEBAR DESKTOP */}
+      <Box sx={{ height: "calc(100vh - 64px)", position: "relative" }}>
+        <MapContainer
+          center={defaultPosition}
+          zoom={15}
+          style={{ height: "100%", width: "100%" }}
+        >
+          <FixMapResize />
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+
+          {position && (
+            <Marker position={position} icon={markerIcon}>
+              <Popup>
+                {position[0].toFixed(5)}, {position[1].toFixed(5)}
+              </Popup>
+            </Marker>
+          )}
+
+          {path.length > 1 && tab === "live" && <Polyline positions={path} />}
+          {histPath.length > 1 && tab === "history" && (
+            <Polyline positions={histPath} />
+          )}
+        </MapContainer>
+
+        {/* PANEL STATS */}
         {showStats && (
           <Box
             sx={{
-              width: { xs: "100%", md: 320 },
-              position: { xs: "absolute", md: "relative" },
+              position: "absolute",
               bottom: 0,
-              zIndex: 1200,
+              left: 0,
+              right: 0,
+              maxHeight: "45%",
               bgcolor: "#0f172a",
+              borderTopLeftRadius: 16,
+              borderTopRightRadius: 16,
               p: 2,
               overflowY: "auto"
             }}
@@ -222,7 +250,7 @@ export default function App() {
               ["Movimiento", `${(stats.mov / 60).toFixed(1)} min`],
               ["Detenido", `${(stats.stop / 60).toFixed(1)} min`]
             ].map(([t, v]) => (
-              <Card key={t} sx={{ bgcolor: "#1f2937", mb: 1 }}>
+              <Card key={t} sx={{ bgcolor: "#1f2937", mb: 1, color: "#fff" }}>
                 <CardContent>
                   <Typography color="#fff">{t}</Typography>
                   <Typography variant="h5" color="#fff">
@@ -234,54 +262,23 @@ export default function App() {
           </Box>
         )}
 
-        {/* MAPA */}
-        <Box sx={{ flex: 1, position: "relative" }}>
-          <MapContainer
-            center={defaultPosition}
-            zoom={15}
-            style={{ height: "100%", width: "100%" }}
-          >
-            <FixMapResize />
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-            {position && tab === "live" && (
-              <Marker position={position} icon={markerIcon} />
-            )}
-            {tab === "live" && path.length > 1 && (
-              <Polyline positions={path} />
-            )}
-            {tab === "history" && histPath.length > 1 && (
-              <Polyline positions={histPath} />
-            )}
-          </MapContainer>
+        {/* FAB */}
+        <Fab
+          sx={{ position: "absolute", bottom: 16, right: 16 }}
+          onClick={() => setShowStats((s) => !s)}
+        >
+          📊
+        </Fab>
 
-          {/* HISTORIAL */}
-          {tab === "history" && (
-            <Historial onSelectDate={loadHistory} />
-          )}
-        </Box>
+        {/* LOGOUT */}
+        <Button
+          onClick={() => signOut(auth)}
+          sx={{ position: "absolute", top: 10, right: 10 }}
+          variant="contained"
+        >
+          Cerrar sesión
+        </Button>
       </Box>
-
-      {/* FAB MOBILE */}
-      <Fab
-        sx={{
-          position: "fixed",
-          bottom: 16,
-          right: 16,
-          display: { md: "none" }
-        }}
-        onClick={() => setShowStats((s) => !s)}
-      >
-        📊
-      </Fab>
-
-      {/* LOGOUT */}
-      <Button
-        onClick={() => signOut(auth)}
-        sx={{ position: "fixed", top: 10, right: 10 }}
-        variant="contained"
-      >
-        Cerrar sesión
-      </Button>
     </Box>
   );
 }
