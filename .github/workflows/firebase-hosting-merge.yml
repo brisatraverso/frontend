@@ -12,19 +12,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Instalar Node
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      # Instalar dependencias y build
       - name: Install dependencies
         run: |
-          cd frontend
           npm install
 
-      - name: Build frontend
+      - name: Build project
         run: |
-          cd frontend
           npm run build
 
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+      # Deploy a Firebase Hosting
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_RASTREO_GPS_F15F7 }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_FRONTEND }}
           channelId: live
           projectId: rastreo-gps-f15f7
