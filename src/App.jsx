@@ -28,7 +28,9 @@ import {
   Typography,
   Box,
   Button,
-  Fab
+  Fab,
+  useTheme,
+  useMediaQuery
 } from "@mui/material";
 
 /* ================= ICONO ================= */
@@ -76,6 +78,9 @@ function ChangeView({ center }) {
 }
 
 export default function App() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
   /* ================= AUTH ================= */
   const [user, setUser] = useState(undefined);
   const [screen, setScreen] = useState("login");
@@ -98,12 +103,10 @@ export default function App() {
   const [velProm, setVelProm] = useState(0);
   const [tiempoMovimiento, setTiempoMovimiento] = useState(0);
   const [tiempoDetenido, setTiempoDetenido] = useState(0);
-  const [frenadas, setFrenadas] = useState(0);
-  const [aceleradas, setAceleradas] = useState(0);
 
   const [showStats, setShowStats] = useState(false);
 
-  /* ================= RESET LIVE ================= */
+  /* ================= RESET ================= */
   useEffect(() => {
     if (tab === "live") {
       setHistPath([]);
@@ -123,7 +126,7 @@ export default function App() {
 
       const newPos = [d.lat, d.lng];
       if (lastPos) {
-        const v = (haversine(...lastPos, ...newPos) * 3.6);
+        const v = haversine(...lastPos, ...newPos) * 3.6;
         setVelocidadActual(v);
       }
       lastPos = newPos;
@@ -192,24 +195,79 @@ export default function App() {
   return (
     <Box sx={{ height: "100vh", bgcolor: "#0d1117", color: "#fff" }}>
       <AppBar sx={{ bgcolor: "#111827" }}>
-        <Tabs value={tab} onChange={(e, v) => setTab(v)} centered>
+        <Tabs
+          value={tab}
+          onChange={(e, v) => {
+            setTab(v);
+            setShowStats(false);
+          }}
+          centered
+        >
           <Tab label="En vivo" value="live" />
           <Tab label="Historial" value="history" />
         </Tabs>
       </AppBar>
 
-      <Box sx={{ display: "flex", height: "calc(100vh - 64px)" }}>
-        {/* STATS PANEL */}
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: isMobile ? "column" : "row",
+          height: "calc(100vh - 64px)"
+        }}
+      >
+        {/* HISTORIAL - SELECTOR FECHAS */}
+        {tab === "history" && !showStats && (
+          <Box
+            sx={{
+              width: "100%",
+              height: "100%",
+              bgcolor: "#0f172a",
+              overflowY: "auto",
+              p: 2
+            }}
+          >
+            <Historial onSelectDate={loadHistory} />
+          </Box>
+        )}
+
+        {/* MAPA */}
+        {!(tab === "history" && !showStats && isMobile) && (
+          <Box sx={{ flex: 1 }}>
+            <MapContainer
+              center={defaultPosition}
+              zoom={15}
+              style={{ height: "100%", width: "100%" }}
+            >
+              <FixMapResize />
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+
+              {position && tab === "live" && (
+                <>
+                  <ChangeView center={position} />
+                  <Marker position={position} icon={markerIcon}>
+                    <Popup>
+                      {position[0].toFixed(5)}, {position[1].toFixed(5)}
+                    </Popup>
+                  </Marker>
+                  {path.length > 1 && <Polyline positions={path} />}
+                </>
+              )}
+
+              {histPath.length > 1 && tab === "history" && (
+                <Polyline positions={histPath} />
+              )}
+            </MapContainer>
+          </Box>
+        )}
+
+        {/* STATS */}
         {showStats && (
           <Box
             sx={{
-              width: { xs: "100%", md: 300 },
-              position: { xs: "absolute", md: "relative" },
-              bottom: 0,
-              height: { xs: "40vh", md: "100%" },
+              width: isMobile ? "100%" : 300,
+              height: isMobile ? "40vh" : "100%",
               bgcolor: "#0f172a",
               overflowY: "auto",
-              zIndex: 1000,
               p: 2
             }}
           >
@@ -229,44 +287,23 @@ export default function App() {
             ))}
           </Box>
         )}
-
-        {/* MAPA */}
-        <Box sx={{ flex: 1 }}>
-          <MapContainer
-            center={defaultPosition}
-            zoom={15}
-            style={{ height: "100%", width: "100%" }}
-          >
-            <FixMapResize />
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-
-            {position && (
-              <Marker position={position} icon={markerIcon}>
-                <Popup>
-                  {position[0].toFixed(5)}, {position[1].toFixed(5)}
-                </Popup>
-              </Marker>
-            )}
-
-            {path.length > 1 && <Polyline positions={path} />}
-            {histPath.length > 1 && <Polyline positions={histPath} />}
-          </MapContainer>
-        </Box>
       </Box>
 
       {/* FAB MOBILE */}
-      <Fab
-        color="primary"
-        sx={{
-          position: "fixed",
-          bottom: 16,
-          right: 16,
-          display: { md: "none" }
-        }}
-        onClick={() => setShowStats((s) => !s)}
-      >
-        📊
-      </Fab>
+      {tab === "history" && (
+        <Fab
+          color="primary"
+          sx={{
+            position: "fixed",
+            bottom: 16,
+            right: 16,
+            display: { md: "none" }
+          }}
+          onClick={() => setShowStats((s) => !s)}
+        >
+          📊
+        </Fab>
+      )}
 
       {/* LOGOUT */}
       <Button
