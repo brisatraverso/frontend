@@ -28,9 +28,7 @@ import {
   Typography,
   Box,
   Button,
-  Fab,
-  useTheme,
-  useMediaQuery
+  Fab
 } from "@mui/material";
 
 /* ================= ICONO ================= */
@@ -55,6 +53,7 @@ function FixMapResize() {
 
 const defaultPosition = [-32.48, -58.23];
 
+/* ================= DISTANCIA ================= */
 function haversine(lat1, lon1, lat2, lon2) {
   const R = 6371e3;
   const p = Math.PI / 180;
@@ -77,14 +76,13 @@ function ChangeView({ center }) {
 }
 
 export default function App() {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-
   /* ================= AUTH ================= */
   const [user, setUser] = useState(undefined);
   const [screen, setScreen] = useState("login");
 
-  useEffect(() => onAuthStateChanged(auth, setUser), []);
+  useEffect(() => {
+    return onAuthStateChanged(auth, setUser);
+  }, []);
 
   /* ================= ESTADOS ================= */
   const [tab, setTab] = useState("live");
@@ -100,27 +98,40 @@ export default function App() {
   const [velProm, setVelProm] = useState(0);
   const [tiempoMovimiento, setTiempoMovimiento] = useState(0);
   const [tiempoDetenido, setTiempoDetenido] = useState(0);
+  const [frenadas, setFrenadas] = useState(0);
+  const [aceleradas, setAceleradas] = useState(0);
 
   const [showStats, setShowStats] = useState(false);
+
+  /* ================= RESET LIVE ================= */
+  useEffect(() => {
+    if (tab === "live") {
+      setHistPath([]);
+      setSelectedDate(null);
+      setShowStats(false);
+    }
+  }, [tab]);
 
   /* ================= LIVE ================= */
   useEffect(() => {
     if (tab !== "live") return;
     let lastPos = null;
 
-    return onValue(ref(db, "vehiculo1"), (snap) => {
+    const unsub = onValue(ref(db, "vehiculo1"), (snap) => {
       const d = snap.val();
       if (!d?.lat || !d?.lng) return;
 
       const newPos = [d.lat, d.lng];
       if (lastPos) {
-        const v = haversine(...lastPos, ...newPos) * 3.6;
+        const v = (haversine(...lastPos, ...newPos) * 3.6);
         setVelocidadActual(v);
       }
       lastPos = newPos;
       setPosition(newPos);
       setPath((p) => [...p, newPos]);
     });
+
+    return () => unsub();
   }, [tab]);
 
   /* ================= HISTORIAL ================= */
@@ -134,7 +145,8 @@ export default function App() {
       if (!data) return;
 
       const puntos = Object.values(data);
-      setHistPath(puntos.map((p) => [p.lat, p.lng]));
+      const coords = puntos.map((p) => [p.lat, p.lng]);
+      setHistPath(coords);
 
       let dist = 0;
       let vels = [];
@@ -163,7 +175,10 @@ export default function App() {
     });
   };
 
-  if (user === undefined) return null;
+  /* ================= LOADING ================= */
+  if (user === undefined)
+    return <Box sx={{ height: "100vh", bgcolor: "#0d1117" }} />;
+
   if (!user)
     return (
       <>
@@ -173,15 +188,7 @@ export default function App() {
       </>
     );
 
-  const stats = [
-    ["Velocidad actual", `${velocidadActual.toFixed(1)} km/h`],
-    ["Distancia", `${totalDist.toFixed(2)} km`],
-    ["Vel máx", `${velMax.toFixed(1)} km/h`],
-    ["Vel prom", `${velProm.toFixed(1)} km/h`],
-    ["Movimiento", `${(tiempoMovimiento / 60).toFixed(1)} min`],
-    ["Detenido", `${(tiempoDetenido / 60).toFixed(1)} min`]
-  ];
-
+  /* ================= UI ================= */
   return (
     <Box sx={{ height: "100vh", bgcolor: "#0d1117", color: "#fff" }}>
       <AppBar sx={{ bgcolor: "#111827" }}>
@@ -192,36 +199,34 @@ export default function App() {
       </AppBar>
 
       <Box sx={{ display: "flex", height: "calc(100vh - 64px)" }}>
-        {/* STATS */}
+        {/* STATS PANEL */}
         {showStats && (
           <Box
             sx={{
-              width: isMobile ? "100%" : 300,
-              height: isMobile ? "40vh" : "100%",
+              width: { xs: "100%", md: 300 },
+              position: { xs: "absolute", md: "relative" },
+              bottom: 0,
+              height: { xs: "40vh", md: "100%" },
               bgcolor: "#0f172a",
-              p: 2,
-              overflowY: "auto"
+              overflowY: "auto",
+              zIndex: 1000,
+              p: 2
             }}
           >
-            {stats.map(([t, v]) => (
+            {[
+              ["Distancia", `${totalDist.toFixed(2)} km`],
+              ["Vel máx", `${velMax.toFixed(1)} km/h`],
+              ["Vel prom", `${velProm.toFixed(1)} km/h`],
+              ["Movimiento", `${(tiempoMovimiento / 60).toFixed(1)} min`],
+              ["Detenido", `${(tiempoDetenido / 60).toFixed(1)} min`]
+            ].map(([t, v]) => (
               <Card key={t} sx={{ bgcolor: "#1f2937", mb: 1 }}>
                 <CardContent>
-                  <Typography sx={{ color: "#fff", opacity: 0.8 }}>
-                    {t}
-                  </Typography>
-                  <Typography variant="h5" sx={{ color: "#fff" }}>
-                    {v}
-                  </Typography>
+                  <Typography>{t}</Typography>
+                  <Typography variant="h5">{v}</Typography>
                 </CardContent>
               </Card>
             ))}
-          </Box>
-        )}
-
-        {/* HISTORIAL */}
-        {tab === "history" && !showStats && (
-          <Box sx={{ width: 320, bgcolor: "#0f172a", p: 2 }}>
-            <Historial onSelectDate={loadHistory} />
           </Box>
         )}
 
@@ -235,34 +240,35 @@ export default function App() {
             <FixMapResize />
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
-            {position && tab === "live" && (
-              <>
-                <ChangeView center={position} />
-                <Marker position={position} icon={markerIcon}>
-                  <Popup>
-                    {position[0].toFixed(5)}, {position[1].toFixed(5)}
-                  </Popup>
-                </Marker>
-                {path.length > 1 && <Polyline positions={path} />}
-              </>
+            {position && (
+              <Marker position={position} icon={markerIcon}>
+                <Popup>
+                  {position[0].toFixed(5)}, {position[1].toFixed(5)}
+                </Popup>
+              </Marker>
             )}
 
-            {tab === "history" && histPath.length > 1 && (
-              <Polyline positions={histPath} />
-            )}
+            {path.length > 1 && <Polyline positions={path} />}
+            {histPath.length > 1 && <Polyline positions={histPath} />}
           </MapContainer>
         </Box>
       </Box>
 
-      {/* FAB */}
+      {/* FAB MOBILE */}
       <Fab
-        sx={{ position: "fixed", bottom: 16, right: 16 }}
         color="primary"
+        sx={{
+          position: "fixed",
+          bottom: 16,
+          right: 16,
+          display: { md: "none" }
+        }}
         onClick={() => setShowStats((s) => !s)}
       >
         📊
       </Fab>
 
+      {/* LOGOUT */}
       <Button
         onClick={() => signOut(auth)}
         sx={{ position: "fixed", top: 10, right: 10 }}
