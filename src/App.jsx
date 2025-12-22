@@ -28,7 +28,8 @@ import {
   Typography,
   Box,
   Button,
-  Fab
+  Fab,
+  useMediaQuery
 } from "@mui/material";
 
 /* ================= ICONO ================= */
@@ -67,28 +68,19 @@ function haversine(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.asin(Math.sqrt(a));
 }
 
-function ChangeView({ center }) {
-  const map = useMap();
-  useEffect(() => {
-    if (center) map.setView(center, 16);
-  }, [center]);
-  return null;
-}
-
 export default function App() {
+  const isDesktop = useMediaQuery("(min-width:900px)");
+
   /* ================= AUTH ================= */
   const [user, setUser] = useState(undefined);
   const [screen, setScreen] = useState("login");
 
-  useEffect(() => {
-    return onAuthStateChanged(auth, setUser);
-  }, []);
+  useEffect(() => onAuthStateChanged(auth, setUser), []);
 
   /* ================= ESTADOS ================= */
   const [tab, setTab] = useState("live");
   const [position, setPosition] = useState(null);
   const [path, setPath] = useState([]);
-  const [velocidadActual, setVelocidadActual] = useState(0);
 
   const [histPath, setHistPath] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -98,8 +90,6 @@ export default function App() {
   const [velProm, setVelProm] = useState(0);
   const [tiempoMovimiento, setTiempoMovimiento] = useState(0);
   const [tiempoDetenido, setTiempoDetenido] = useState(0);
-  const [frenadas, setFrenadas] = useState(0);
-  const [aceleradas, setAceleradas] = useState(0);
 
   const [showStats, setShowStats] = useState(false);
 
@@ -115,37 +105,33 @@ export default function App() {
   /* ================= LIVE ================= */
   useEffect(() => {
     if (tab !== "live") return;
-    let lastPos = null;
 
-    const unsub = onValue(ref(db, "vehiculo1"), (snap) => {
+    let lastPos = null;
+    const unsub = onValue(ref(db, "vehiculo1"), snap => {
       const d = snap.val();
       if (!d?.lat || !d?.lng) return;
 
-      const newPos = [d.lat, d.lng];
-      if (lastPos) {
-        const v = (haversine(...lastPos, ...newPos) * 3.6);
-        setVelocidadActual(v);
-      }
-      lastPos = newPos;
-      setPosition(newPos);
-      setPath((p) => [...p, newPos]);
+      const pos = [d.lat, d.lng];
+      setPosition(pos);
+      setPath(p => [...p, pos]);
+      lastPos = pos;
     });
 
     return () => unsub();
   }, [tab]);
 
   /* ================= HISTORIAL ================= */
-  const loadHistory = (fecha) => {
+  const loadHistory = fecha => {
     setSelectedDate(fecha);
     setShowStats(true);
     setTab("history");
 
-    onValue(ref(db, `historial/vehiculo1/${fecha}`), (snap) => {
+    onValue(ref(db, `historial/vehiculo1/${fecha}`), snap => {
       const data = snap.val();
       if (!data) return;
 
       const puntos = Object.values(data);
-      const coords = puntos.map((p) => [p.lat, p.lng]);
+      const coords = puntos.map(p => [p.lat, p.lng]);
       setHistPath(coords);
 
       let dist = 0;
@@ -176,8 +162,7 @@ export default function App() {
   };
 
   /* ================= LOADING ================= */
-  if (user === undefined)
-    return <Box sx={{ height: "100vh", bgcolor: "#0d1117" }} />;
+  if (user === undefined) return <Box sx={{ height: "100vh" }} />;
 
   if (!user)
     return (
@@ -187,6 +172,8 @@ export default function App() {
         {screen === "reset" && <ResetPassword onNavigate={setScreen} />}
       </>
     );
+
+  const showStatsPanel = isDesktop || showStats;
 
   /* ================= UI ================= */
   return (
@@ -199,8 +186,8 @@ export default function App() {
       </AppBar>
 
       <Box sx={{ display: "flex", height: "calc(100vh - 64px)" }}>
-        {/* STATS PANEL */}
-        {showStats && (
+        {/* STATS */}
+        {showStatsPanel && (
           <Box
             sx={{
               width: { xs: "100%", md: 300 },
@@ -208,9 +195,9 @@ export default function App() {
               bottom: 0,
               height: { xs: "40vh", md: "100%" },
               bgcolor: "#0f172a",
-              overflowY: "auto",
               zIndex: 1000,
-              p: 2
+              p: 2,
+              overflowY: "auto"
             }}
           >
             {[
@@ -230,8 +217,10 @@ export default function App() {
           </Box>
         )}
 
-        {/* MAPA */}
+        {/* MAPA + HISTORIAL */}
         <Box sx={{ flex: 1 }}>
+          {tab === "history" && <Historial onSelectDate={loadHistory} />}
+
           <MapContainer
             center={defaultPosition}
             zoom={15}
@@ -255,18 +244,15 @@ export default function App() {
       </Box>
 
       {/* FAB MOBILE */}
-      <Fab
-        color="primary"
-        sx={{
-          position: "fixed",
-          bottom: 16,
-          right: 16,
-          display: { md: "none" }
-        }}
-        onClick={() => setShowStats((s) => !s)}
-      >
-        📊
-      </Fab>
+      {!isDesktop && (
+        <Fab
+          color="primary"
+          sx={{ position: "fixed", bottom: 16, right: 16 }}
+          onClick={() => setShowStats(s => !s)}
+        >
+          📊
+        </Fab>
+      )}
 
       {/* LOGOUT */}
       <Button
