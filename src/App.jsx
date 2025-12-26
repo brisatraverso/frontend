@@ -5,6 +5,7 @@ import {
   TileLayer,
   Marker,
   Polyline,
+  Popup,
   useMap
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -32,10 +33,24 @@ import {
   useMediaQuery
 } from "@mui/material";
 
-/* ================= ICONO ================= */
+/* ================= ICONOS ================= */
 const markerIcon = new L.Icon({
   iconUrl:
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41]
+});
+
+const startIcon = new L.Icon({
+  iconUrl:
+    "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41]
+});
+
+const endIcon = new L.Icon({
+  iconUrl:
+    "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
   iconSize: [25, 41],
   iconAnchor: [12, 41]
 });
@@ -92,7 +107,6 @@ export default function App() {
       setShowStats(false);
       setPath([]);
     } else {
-      // RESET TOTAL AL VOLVER A EN VIVO
       setHistPath([]);
       setTotalDist(0);
       setVelMax(0);
@@ -189,21 +203,13 @@ export default function App() {
       </AppBar>
 
       {/* CONTENIDO */}
-      <Box
-        sx={{
-          display: "flex",
-          height: "calc(100vh - 64px)",
-          mt: "64px"
-        }}
-      >
-        {/* HISTORIAL SIDEBAR */}
+      <Box sx={{ display: "flex", height: "calc(100vh - 64px)", mt: "64px" }}>
         {showHistoryList && (
           <Box sx={{ width: 280, bgcolor: "#0f172a", p: 2 }}>
             <Historial onSelectDate={loadHistory} />
           </Box>
         )}
 
-        {/* STATS SIDEBAR */}
         {showStats && (
           <Box sx={{ width: 300, bgcolor: "#0f172a", p: 2 }}>
             {[
@@ -249,16 +255,46 @@ export default function App() {
           >
             <FixMapResize />
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-            {position && <Marker position={position} icon={markerIcon} />}
-            {path.length > 1 && <Polyline positions={path} />}
-            {histPath.length > 1 && <Polyline positions={histPath} />}
+
+            {/* EN VIVO */}
+            {tab === "live" && position && (
+              <Marker position={position} icon={markerIcon}>
+                <Popup>
+                  Lat: {position[0].toFixed(6)}
+                  <br />
+                  Lng: {position[1].toFixed(6)}
+                </Popup>
+              </Marker>
+            )}
+
+            {path.length > 1 && tab === "live" && (
+              <Polyline positions={path} />
+            )}
+
+            {/* HISTORIAL */}
+            {histPath.length > 1 && tab === "history" && (
+              <>
+                <Polyline positions={histPath} />
+
+                <Marker position={histPath[0]} icon={startIcon}>
+                  <Popup>Inicio del recorrido</Popup>
+                </Marker>
+
+                <Marker
+                  position={histPath[histPath.length - 1]}
+                  icon={endIcon}
+                >
+                  <Popup>Fin del recorrido</Popup>
+                </Marker>
+              </>
+            )}
           </MapContainer>
         </Box>
       </Box>
 
       {!isDesktop && (
         <Fab
-          sx={{ position: "fixed", bottom: 16, right: 16 }}
+          sx={{ position: "fixed", bottom: 16, right: 16, color: "#359cd8ff" }}
           onClick={() => setShowStats(s => !s)}
         >
           📊
