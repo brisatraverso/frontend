@@ -150,6 +150,7 @@ export default function App() {
   };
 
   if (user === undefined) return null;
+
   if (!user)
     return (
       <>
@@ -162,23 +163,50 @@ export default function App() {
   return (
     <Box sx={{ height: "100vh", bgcolor: "#0d1117", color: "#fff" }}>
       <AppBar sx={{ bgcolor: "#111827" }}>
-        <Tabs value={tab} onChange={(e, v) => setTab(v)} centered>
-          <Tab label="En vivo" value="live" />
-          <Tab label="Historial" value="history" />
+        <Tabs
+          value={tab}
+          onChange={(e, v) => setTab(v)}
+          centered
+          textColor="inherit"
+          indicatorColor="secondary"
+        >
+          <Tab label="En vivo" value="live" sx={{ color: "#fff" }} />
+          <Tab label="Historial" value="history" sx={{ color: "#fff" }} />
         </Tabs>
       </AppBar>
 
-      <Box sx={{ display: "flex", height: "calc(100vh - 64px)" }}>
+      <Box
+        sx={{
+          display: "flex",
+          height: "calc(100vh - 64px)",
+          mt: "64px"
+        }}
+      >
         {/* HISTORIAL SIDEBAR */}
         {showHistoryList && (
-          <Box sx={{ width: 280, bgcolor: "#0f172a", p: 2 }}>
+          <Box
+            sx={{
+              width: 280,
+              bgcolor: "#0f172a",
+              p: 2,
+              color: "#fff"
+            }}
+          >
             <Historial onSelectDate={loadHistory} />
           </Box>
         )}
 
         {/* STATS SIDEBAR */}
         {showStats && (
-          <Box sx={{ width: 300, bgcolor: "#0f172a", p: 2 }}>
+          <Box
+            sx={{
+              width: 300,
+              bgcolor: "#0f172a",
+              p: 2,
+              pt: 3,
+              overflowY: "auto"
+            }}
+          >
             {[
               ["Distancia", `${totalDist.toFixed(2)} km`],
               ["Vel máx", `${velMax.toFixed(1)} km/h`],
@@ -188,8 +216,8 @@ export default function App() {
             ].map(([t, v]) => (
               <Card key={t} sx={{ bgcolor: "#1f2937", mb: 1 }}>
                 <CardContent>
-                  <Typography color="white">{t}</Typography>
-                  <Typography variant="h5" color="white">
+                  <Typography sx={{ color: "#fff" }}>{t}</Typography>
+                  <Typography variant="h5" sx={{ color: "#fff" }}>
                     {v}
                   </Typography>
                 </CardContent>
