@@ -2,6 +2,8 @@ import { useState } from "react";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "./firebase";
 import { Box, Button, TextField, Typography, Card } from "@mui/material";
+import fondo from "./assets/fondo.png";
+
 
 export default function Register({ onNavigate }) {
   const [email, setEmail] = useState("");
@@ -34,7 +36,7 @@ export default function Register({ onNavigate }) {
   return (
     <Box sx={{
     height: "100vh", display: "flex", justifyContent: "center",
-    alignItems: "center", backgroundImage: "url('/src/assets/fondo.png')",
+    alignItems: "center", backgroundImage: `url(${fondo})`,
     backgroundSize: "cover", backgroundPosition: "center", 
     backgroundRepeat: "no-repeat",color: "#fff"
     }}>

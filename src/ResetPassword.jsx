@@ -2,6 +2,8 @@ import { useState } from "react";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "./firebase";
 import { Box, Card, TextField, Button, Typography } from "@mui/material";
+import fondo from "./assets/fondo.png";
+
 
 export default function ResetPassword({ onNavigate }) {
   const [email, setEmail] = useState("");
@@ -40,10 +42,10 @@ export default function ResetPassword({ onNavigate }) {
       display: "flex",
       justifyContent: "center",
       alignItems: "center",
-      backgroundImage: "url('/src/assets/fondo.png')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
+      backgroundImage: `url(${fondo})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      backgroundRepeat: "no-repeat",
 
     }}>
       <Card sx={{

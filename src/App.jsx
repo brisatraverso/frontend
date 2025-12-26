@@ -296,19 +296,19 @@ export default function App() {
                 <Polyline positions={histPath} />
 
                 <Marker position={histPath[0]} icon={startIcon}>
-                  <Popup>🟢 Inicio del recorrido</Popup>
+                  <Popup>Inicio del recorrido</Popup>
                 </Marker>
 
                 <Marker
                   position={histPath[histPath.length - 1]}
                   icon={endIcon}
                 >
-                  <Popup>🔴 Fin del recorrido</Popup>
+                  <Popup>Fin del recorrido</Popup>
                 </Marker>
 
                 {stopPoints.map((p, i) => (
                   <Marker key={i} position={p} icon={stopIcon}>
-                    <Popup>🟡 Vehículo detenido</Popup>
+                    <Popup>Vehículo detenido</Popup>
                   </Marker>
                 ))}
               </>
