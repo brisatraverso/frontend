@@ -294,12 +294,22 @@ export default function App() {
 
       {!isDesktop && (
         <Fab
-          sx={{ position: "fixed", bottom: 16, right: 16, color: "#359cd8ff" }}
           onClick={() => setShowStats(s => !s)}
+          sx={{
+            position: "fixed",
+            bottom: 16,
+            right: 16,
+            bgcolor: "#2563eb",      // azul
+            color: "#fff",
+            "&:hover": {
+              bgcolor: "#1d4ed8"
+            }
+          }}
         >
           📊
         </Fab>
       )}
+
     </Box>
   );
 }
