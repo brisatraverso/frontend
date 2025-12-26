@@ -55,6 +55,13 @@ const endIcon = new L.Icon({
   iconAnchor: [12, 41]
 });
 
+const stopIcon = new L.Icon({
+  iconUrl:
+    "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-yellow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41]
+});
+
 function FixMapResize() {
   const map = useMap();
   useEffect(() => {
@@ -88,6 +95,7 @@ export default function App() {
   const [position, setPosition] = useState(null);
   const [path, setPath] = useState([]);
   const [histPath, setHistPath] = useState([]);
+  const [stopPoints, setStopPoints] = useState([]);
 
   const [totalDist, setTotalDist] = useState(0);
   const [velMax, setVelMax] = useState(0);
@@ -108,6 +116,7 @@ export default function App() {
       setPath([]);
     } else {
       setHistPath([]);
+      setStopPoints([]);
       setTotalDist(0);
       setVelMax(0);
       setVelProm(0);
@@ -138,6 +147,8 @@ export default function App() {
 
     onValue(ref(db, `historial/vehiculo1/${fecha}`), snap => {
       const puntos = Object.values(snap.val() || {});
+      if (puntos.length < 2) return;
+
       const coords = puntos.map(p => [p.lat, p.lng]);
       setHistPath(coords);
 
@@ -145,23 +156,30 @@ export default function App() {
       let vels = [];
       let mov = 0;
       let stop = 0;
+      let stops = [];
 
       for (let i = 1; i < puntos.length; i++) {
-        const d = haversine(
-          puntos[i - 1].lat,
-          puntos[i - 1].lng,
-          puntos[i].lat,
-          puntos[i].lng
-        );
+        const p1 = puntos[i - 1];
+        const p2 = puntos[i];
+
+        const d = haversine(p1.lat, p1.lng, p2.lat, p2.lng);
         dist += d;
-        const dt = (puntos[i].timestamp - puntos[i - 1].timestamp) / 1000;
+
+        const dt = (p2.timestamp - p1.timestamp) / 1000;
         if (dt > 0) {
           const v = (d / dt) * 3.6;
           vels.push(v);
-          v > 2 ? (mov += dt) : (stop += dt);
+
+          if (v <= 2) {
+            stop += dt;
+            stops.push([p2.lat, p2.lng]);
+          } else {
+            mov += dt;
+          }
         }
       }
 
+      setStopPoints(stops);
       setTotalDist(dist / 1000);
       setVelMax(Math.max(...vels, 0));
       setVelProm(vels.length ? vels.reduce((a, b) => a + b) / vels.length : 0);
@@ -238,6 +256,7 @@ export default function App() {
                   setShowStats(false);
                   setShowHistoryList(true);
                   setHistPath([]);
+                  setStopPoints([]);
                 }}
               >
                 Seleccionar otra fecha
@@ -267,25 +286,31 @@ export default function App() {
               </Marker>
             )}
 
-            {path.length > 1 && tab === "live" && (
+            {tab === "live" && path.length > 1 && (
               <Polyline positions={path} />
             )}
 
             {/* HISTORIAL */}
-            {histPath.length > 1 && tab === "history" && (
+            {tab === "history" && histPath.length > 1 && (
               <>
                 <Polyline positions={histPath} />
 
                 <Marker position={histPath[0]} icon={startIcon}>
-                  <Popup>Inicio del recorrido</Popup>
+                  <Popup>🟢 Inicio del recorrido</Popup>
                 </Marker>
 
                 <Marker
                   position={histPath[histPath.length - 1]}
                   icon={endIcon}
                 >
-                  <Popup>Fin del recorrido</Popup>
+                  <Popup>🔴 Fin del recorrido</Popup>
                 </Marker>
+
+                {stopPoints.map((p, i) => (
+                  <Marker key={i} position={p} icon={stopIcon}>
+                    <Popup>🟡 Vehículo detenido</Popup>
+                  </Marker>
+                ))}
               </>
             )}
           </MapContainer>
@@ -299,17 +324,14 @@ export default function App() {
             position: "fixed",
             bottom: 16,
             right: 16,
-            bgcolor: "#2563eb",      // azul
+            bgcolor: "#2563eb",
             color: "#fff",
-            "&:hover": {
-              bgcolor: "#1d4ed8"
-            }
+            "&:hover": { bgcolor: "#1d4ed8" }
           }}
         >
           📊
         </Fab>
       )}
-
     </Box>
   );
 }
