@@ -29,8 +29,7 @@ import {
   Box,
   Button,
   Fab,
-  useMediaQuery,
-  Toolbar
+  useMediaQuery
 } from "@mui/material";
 
 /* ================= ICONO ================= */
@@ -86,22 +85,29 @@ export default function App() {
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
 
-  /* ================= TAB ================= */
+  /* ================= CAMBIO DE TAB ================= */
   useEffect(() => {
     if (tab === "history") {
-      setShowStats(false);
       setShowHistoryList(true);
+      setShowStats(false);
       setPath([]);
     } else {
-      setShowStats(isDesktop);
-      setShowHistoryList(false);
+      // RESET TOTAL AL VOLVER A EN VIVO
       setHistPath([]);
+      setTotalDist(0);
+      setVelMax(0);
+      setVelProm(0);
+      setTiempoMovimiento(0);
+      setTiempoDetenido(0);
+      setShowHistoryList(false);
+      setShowStats(isDesktop);
     }
   }, [tab, isDesktop]);
 
   /* ================= LIVE ================= */
   useEffect(() => {
     if (tab !== "live") return;
+
     return onValue(ref(db, "vehiculo1"), snap => {
       const d = snap.val();
       if (!d?.lat || !d?.lng) return;
@@ -163,30 +169,26 @@ export default function App() {
 
   return (
     <Box sx={{ height: "100vh", bgcolor: "#0d1117", color: "#fff" }}>
-      {/* ================= APP BAR ================= */}
-      <AppBar sx={{ bgcolor: "#111827" }}>
-        <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
+      {/* APPBAR */}
+      <AppBar sx={{ bgcolor: "#111827", px: 2 }} position="fixed">
+        <Box sx={{ display: "flex", alignItems: "center" }}>
           <Tabs
             value={tab}
             onChange={(e, v) => setTab(v)}
             textColor="inherit"
-            indicatorColor="secondary"
+            sx={{ flex: 1 }}
           >
-            <Tab label="En vivo" value="live" sx={{ color: "#fff" }} />
-            <Tab label="Historial" value="history" sx={{ color: "#fff" }} />
+            <Tab label="EN VIVO" value="live" sx={{ color: "#fff" }} />
+            <Tab label="HISTORIAL" value="history" sx={{ color: "#fff" }} />
           </Tabs>
 
-          <Button
-            color="inherit"
-            onClick={() => signOut(auth)}
-            sx={{ color: "#fff" }}
-          >
-            Cerrar sesión
+          <Button color="inherit" onClick={() => signOut(auth)}>
+            CERRAR SESIÓN
           </Button>
-        </Toolbar>
+        </Box>
       </AppBar>
 
-      {/* ================= CONTENIDO ================= */}
+      {/* CONTENIDO */}
       <Box
         sx={{
           display: "flex",
