@@ -33,6 +33,9 @@ import {
   useMediaQuery
 } from "@mui/material";
 
+/* ================= CONFIG ================= */
+const MIN_STOP_TIME = 120; // segundos mínimos para considerar parada
+
 /* ================= ICONOS ================= */
 const markerIcon = new L.Icon({
   iconUrl:
@@ -95,7 +98,7 @@ export default function App() {
   const [position, setPosition] = useState(null);
   const [path, setPath] = useState([]);
   const [histPath, setHistPath] = useState([]);
-  const [stopPoints, setStopPoints] = useState([]);
+  const [stops, setStops] = useState([]);
 
   const [totalDist, setTotalDist] = useState(0);
   const [velMax, setVelMax] = useState(0);
@@ -116,7 +119,7 @@ export default function App() {
       setPath([]);
     } else {
       setHistPath([]);
-      setStopPoints([]);
+      setStops([]);
       setTotalDist(0);
       setVelMax(0);
       setVelProm(0);
@@ -144,6 +147,7 @@ export default function App() {
   const loadHistory = fecha => {
     setShowHistoryList(false);
     setShowStats(true);
+    setStops([]);
 
     onValue(ref(db, `historial/vehiculo1/${fecha}`), snap => {
       const puntos = Object.values(snap.val() || {});
@@ -156,33 +160,69 @@ export default function App() {
       let vels = [];
       let mov = 0;
       let stop = 0;
-      let stops = [];
+
+      let currentStop = null;
+      let detectedStops = [];
 
       for (let i = 1; i < puntos.length; i++) {
-        const p1 = puntos[i - 1];
-        const p2 = puntos[i];
+        const d = haversine(
+          puntos[i - 1].lat,
+          puntos[i - 1].lng,
+          puntos[i].lat,
+          puntos[i].lng
+        );
 
-        const d = haversine(p1.lat, p1.lng, p2.lat, p2.lng);
         dist += d;
 
-        const dt = (p2.timestamp - p1.timestamp) / 1000;
-        if (dt > 0) {
-          const v = (d / dt) * 3.6;
-          vels.push(v);
+        const dt =
+          (puntos[i].timestamp - puntos[i - 1].timestamp) / 1000;
 
-          if (v <= 2) {
-            stop += dt;
-            stops.push([p2.lat, p2.lng]);
+        if (dt <= 0) continue;
+
+        const v = (d / dt) * 3.6;
+        vels.push(v);
+
+        if (v <= 2) {
+          stop += dt;
+
+          if (!currentStop) {
+            currentStop = {
+              lat: puntos[i].lat,
+              lng: puntos[i].lng,
+              time: dt
+            };
           } else {
-            mov += dt;
+            currentStop.time += dt;
           }
+        } else {
+          mov += dt;
+
+          if (
+            currentStop &&
+            currentStop.time >= MIN_STOP_TIME
+          ) {
+            detectedStops.push(currentStop);
+          }
+          currentStop = null;
         }
       }
 
-      setStopPoints(stops);
+      if (
+        currentStop &&
+        currentStop.time >= MIN_STOP_TIME
+      ) {
+        detectedStops.push(currentStop);
+      }
+
+      setStops(detectedStops);
+
       setTotalDist(dist / 1000);
       setVelMax(Math.max(...vels, 0));
-      setVelProm(vels.length ? vels.reduce((a, b) => a + b) / vels.length : 0);
+      setVelProm(
+        vels.length
+          ? vels.reduce((a, b) => a + b) / vels.length
+          : 0
+      );
       setTiempoMovimiento(mov);
       setTiempoDetenido(stop);
     });
@@ -204,16 +244,10 @@ export default function App() {
       {/* APPBAR */}
       <AppBar sx={{ bgcolor: "#111827", px: 2 }} position="fixed">
         <Box sx={{ display: "flex", alignItems: "center" }}>
-          <Tabs
-            value={tab}
-            onChange={(e, v) => setTab(v)}
-            textColor="inherit"
-            sx={{ flex: 1 }}
-          >
+          <Tabs value={tab} onChange={(e, v) => setTab(v)} sx={{ flex: 1 }}>
             <Tab label="EN VIVO" value="live" sx={{ color: "#fff" }} />
             <Tab label="HISTORIAL" value="history" sx={{ color: "#fff" }} />
           </Tabs>
-
           <Button color="inherit" onClick={() => signOut(auth)}>
             CERRAR SESIÓN
           </Button>
@@ -256,7 +290,7 @@ export default function App() {
                   setShowStats(false);
                   setShowHistoryList(true);
                   setHistPath([]);
-                  setStopPoints([]);
+                  setStops([]);
                 }}
               >
                 Seleccionar otra fecha
@@ -306,9 +340,11 @@ export default function App() {
                   <Popup>Fin del recorrido</Popup>
                 </Marker>
 
-                {stopPoints.map((p, i) => (
-                  <Marker key={i} position={p} icon={stopIcon}>
-                    <Popup>Vehículo detenido</Popup>
+                {stops.map((s, i) => (
+                  <Marker key={i} position={[s.lat, s.lng]} icon={stopIcon}>
+                    <Popup>
+                      Detenido {(s.time / 60).toFixed(1)} min
+                    </Popup>
                   </Marker>
                 ))}
               </>
