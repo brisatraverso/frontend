@@ -29,7 +29,8 @@ import {
   Box,
   Button,
   Fab,
-  useMediaQuery
+  useMediaQuery,
+  Toolbar
 } from "@mui/material";
 
 /* ================= ICONO ================= */
@@ -162,19 +163,30 @@ export default function App() {
 
   return (
     <Box sx={{ height: "100vh", bgcolor: "#0d1117", color: "#fff" }}>
+      {/* ================= APP BAR ================= */}
       <AppBar sx={{ bgcolor: "#111827" }}>
-        <Tabs
-          value={tab}
-          onChange={(e, v) => setTab(v)}
-          centered
-          textColor="inherit"
-          indicatorColor="secondary"
-        >
-          <Tab label="En vivo" value="live" sx={{ color: "#fff" }} />
-          <Tab label="Historial" value="history" sx={{ color: "#fff" }} />
-        </Tabs>
+        <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
+          <Tabs
+            value={tab}
+            onChange={(e, v) => setTab(v)}
+            textColor="inherit"
+            indicatorColor="secondary"
+          >
+            <Tab label="En vivo" value="live" sx={{ color: "#fff" }} />
+            <Tab label="Historial" value="history" sx={{ color: "#fff" }} />
+          </Tabs>
+
+          <Button
+            color="inherit"
+            onClick={() => signOut(auth)}
+            sx={{ color: "#fff" }}
+          >
+            Cerrar sesión
+          </Button>
+        </Toolbar>
       </AppBar>
 
+      {/* ================= CONTENIDO ================= */}
       <Box
         sx={{
           display: "flex",
@@ -184,29 +196,14 @@ export default function App() {
       >
         {/* HISTORIAL SIDEBAR */}
         {showHistoryList && (
-          <Box
-            sx={{
-              width: 280,
-              bgcolor: "#0f172a",
-              p: 2,
-              color: "#fff"
-            }}
-          >
+          <Box sx={{ width: 280, bgcolor: "#0f172a", p: 2 }}>
             <Historial onSelectDate={loadHistory} />
           </Box>
         )}
 
         {/* STATS SIDEBAR */}
         {showStats && (
-          <Box
-            sx={{
-              width: 300,
-              bgcolor: "#0f172a",
-              p: 2,
-              pt: 3,
-              overflowY: "auto"
-            }}
-          >
+          <Box sx={{ width: 300, bgcolor: "#0f172a", p: 2 }}>
             {[
               ["Distancia", `${totalDist.toFixed(2)} km`],
               ["Vel máx", `${velMax.toFixed(1)} km/h`],
@@ -216,13 +213,28 @@ export default function App() {
             ].map(([t, v]) => (
               <Card key={t} sx={{ bgcolor: "#1f2937", mb: 1 }}>
                 <CardContent>
-                  <Typography sx={{ color: "#fff" }}>{t}</Typography>
-                  <Typography variant="h5" sx={{ color: "#fff" }}>
+                  <Typography color="white">{t}</Typography>
+                  <Typography variant="h5" color="white">
                     {v}
                   </Typography>
                 </CardContent>
               </Card>
             ))}
+
+            {tab === "history" && (
+              <Button
+                fullWidth
+                variant="outlined"
+                sx={{ mt: 2, color: "#fff", borderColor: "#fff" }}
+                onClick={() => {
+                  setShowStats(false);
+                  setShowHistoryList(true);
+                  setHistPath([]);
+                }}
+              >
+                Seleccionar otra fecha
+              </Button>
+            )}
           </Box>
         )}
 
@@ -250,14 +262,6 @@ export default function App() {
           📊
         </Fab>
       )}
-
-      <Button
-        onClick={() => signOut(auth)}
-        sx={{ position: "fixed", top: 10, right: 10 }}
-        variant="contained"
-      >
-        Cerrar sesión
-      </Button>
     </Box>
   );
 }
