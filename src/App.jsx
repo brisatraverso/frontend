@@ -1,5 +1,5 @@
 // App.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -34,7 +34,7 @@ import {
 } from "@mui/material";
 
 /* ================= CONFIG ================= */
-const MIN_STOP_TIME = 120; // segundos mínimos para considerar parada
+const MIN_STOP_TIME = 120;
 
 /* ================= ICONOS ================= */
 const markerIcon = new L.Icon({
@@ -91,23 +91,32 @@ function haversine(lat1, lon1, lat2, lon2) {
 export default function App() {
   const isDesktop = useMediaQuery("(min-width:900px)");
 
-  const [user, setUser] = useState(undefined);
-  const [screen, setScreen] = useState("login");
-  const [tab, setTab] = useState("live");
+  const [user, setUser]       = useState(undefined);
+  const [screen, setScreen]   = useState("login");
+  const [tab, setTab]         = useState("live");
 
-  const [position, setPosition] = useState(null);
-  const [path, setPath] = useState([]);
-  const [histPath, setHistPath] = useState([]);
-  const [stops, setStops] = useState([]);
+  const [position, setPosition]   = useState(null);
+  const [path, setPath]           = useState([]);
+  const [histPath, setHistPath]   = useState([]);
+  const [stops, setStops]         = useState([]);
 
-  const [totalDist, setTotalDist] = useState(0);
-  const [velMax, setVelMax] = useState(0);
-  const [velProm, setVelProm] = useState(0);
+  const [totalDist, setTotalDist]               = useState(0);
+  const [velMax, setVelMax]                     = useState(0);
+  const [velProm, setVelProm]                   = useState(0);
   const [tiempoMovimiento, setTiempoMovimiento] = useState(0);
-  const [tiempoDetenido, setTiempoDetenido] = useState(0);
+  const [tiempoDetenido, setTiempoDetenido]     = useState(0);
 
-  const [showStats, setShowStats] = useState(false);
+  const [showStats, setShowStats]           = useState(false);
   const [showHistoryList, setShowHistoryList] = useState(false);
+
+  // ── Refs para acumular valores en el listener EN VIVO ──
+  // (no causan re-renders innecesarios)
+  const prevPointRef     = useRef(null);
+  const prevTimestampRef = useRef(null);
+  const acumDistRef      = useRef(0);
+  const acumVelsRef      = useRef([]);
+  const acumMovRef       = useRef(0);
+  const acumStopRef      = useRef(0);
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
 
@@ -134,12 +143,57 @@ export default function App() {
   useEffect(() => {
     if (tab !== "live") return;
 
+    // Resetear acumuladores al entrar a EN VIVO
+    prevPointRef.current     = null;
+    prevTimestampRef.current = null;
+    acumDistRef.current      = 0;
+    acumVelsRef.current      = [];
+    acumMovRef.current       = 0;
+    acumStopRef.current      = 0;
+
     return onValue(ref(db, "vehiculo1"), snap => {
       const d = snap.val();
       if (!d?.lat || !d?.lng) return;
+
       const pos = [d.lat, d.lng];
       setPosition(pos);
       setPath(p => [...p, pos]);
+
+      const now = d.timestamp || Date.now();
+
+      if (prevPointRef.current && prevTimestampRef.current) {
+        const [prevLat, prevLng] = prevPointRef.current;
+
+        // Distancia entre punto anterior y actual (metros)
+        const dist = haversine(prevLat, prevLng, d.lat, d.lng);
+        acumDistRef.current += dist;
+        setTotalDist(acumDistRef.current / 1000);
+
+        // Tiempo transcurrido en segundos
+        const dt = (now - prevTimestampRef.current) / 1000;
+
+        if (dt > 0 && dt < 300) { // ignorar saltos > 5 min
+          const vel = (dist / dt) * 3.6; // km/h
+
+          acumVelsRef.current.push(vel);
+          setVelMax(v => Math.max(v, vel));
+          setVelProm(
+            acumVelsRef.current.reduce((a, b) => a + b, 0) /
+            acumVelsRef.current.length
+          );
+
+          if (vel > 2) {
+            acumMovRef.current += dt;
+          } else {
+            acumStopRef.current += dt;
+          }
+          setTiempoMovimiento(acumMovRef.current);
+          setTiempoDetenido(acumStopRef.current);
+        }
+      }
+
+      prevPointRef.current     = pos;
+      prevTimestampRef.current = now;
     });
   }, [tab]);
 
@@ -158,11 +212,11 @@ export default function App() {
 
       let dist = 0;
       let vels = [];
-      let mov = 0;
+      let mov  = 0;
       let stop = 0;
 
-      let currentStop = null;
-      let detectedStops = [];
+      let currentStop    = null;
+      let detectedStops  = [];
 
       for (let i = 1; i < puntos.length; i++) {
         const d = haversine(
@@ -174,9 +228,7 @@ export default function App() {
 
         dist += d;
 
-        const dt =
-          (puntos[i].timestamp - puntos[i - 1].timestamp) / 1000;
-
+        const dt = (puntos[i].timestamp - puntos[i - 1].timestamp) / 1000;
         if (dt <= 0) continue;
 
         const v = (d / dt) * 3.6;
@@ -184,44 +236,29 @@ export default function App() {
 
         if (v <= 2) {
           stop += dt;
-
           if (!currentStop) {
-            currentStop = {
-              lat: puntos[i].lat,
-              lng: puntos[i].lng,
-              time: dt
-            };
+            currentStop = { lat: puntos[i].lat, lng: puntos[i].lng, time: dt };
           } else {
             currentStop.time += dt;
           }
         } else {
           mov += dt;
-
-          if (
-            currentStop &&
-            currentStop.time >= MIN_STOP_TIME
-          ) {
+          if (currentStop && currentStop.time >= MIN_STOP_TIME) {
             detectedStops.push(currentStop);
           }
           currentStop = null;
         }
       }
 
-      if (
-        currentStop &&
-        currentStop.time >= MIN_STOP_TIME
-      ) {
+      if (currentStop && currentStop.time >= MIN_STOP_TIME) {
         detectedStops.push(currentStop);
       }
 
       setStops(detectedStops);
-
       setTotalDist(dist / 1000);
       setVelMax(Math.max(...vels, 0));
       setVelProm(
-        vels.length
-          ? vels.reduce((a, b) => a + b) / vels.length
-          : 0
+        vels.length ? vels.reduce((a, b) => a + b) / vels.length : 0
       );
       setTiempoMovimiento(mov);
       setTiempoDetenido(stop);
@@ -233,9 +270,9 @@ export default function App() {
   if (!user)
     return (
       <>
-        {screen === "login" && <Login onNavigate={setScreen} />}
+        {screen === "login"    && <Login onNavigate={setScreen} />}
         {screen === "register" && <Register onNavigate={setScreen} />}
-        {screen === "reset" && <ResetPassword onNavigate={setScreen} />}
+        {screen === "reset"    && <ResetPassword onNavigate={setScreen} />}
       </>
     );
 
@@ -265,18 +302,16 @@ export default function App() {
         {showStats && (
           <Box sx={{ width: 300, bgcolor: "#0f172a", p: 2 }}>
             {[
-              ["Distancia", `${totalDist.toFixed(2)} km`],
-              ["Vel máx", `${velMax.toFixed(1)} km/h`],
-              ["Vel prom", `${velProm.toFixed(1)} km/h`],
-              ["Movimiento", `${(tiempoMovimiento / 60).toFixed(1)} min`],
-              ["Detenido", `${(tiempoDetenido / 60).toFixed(1)} min`]
+              ["Distancia",   `${totalDist.toFixed(2)} km`],
+              ["Vel máx",     `${velMax.toFixed(1)} km/h`],
+              ["Vel prom",    `${velProm.toFixed(1)} km/h`],
+              ["Movimiento",  `${(tiempoMovimiento / 60).toFixed(1)} min`],
+              ["Detenido",    `${(tiempoDetenido / 60).toFixed(1)} min`]
             ].map(([t, v]) => (
               <Card key={t} sx={{ bgcolor: "#1f2937", mb: 1 }}>
                 <CardContent>
                   <Typography color="white">{t}</Typography>
-                  <Typography variant="h5" color="white">
-                    {v}
-                  </Typography>
+                  <Typography variant="h5" color="white">{v}</Typography>
                 </CardContent>
               </Card>
             ))}
@@ -313,13 +348,11 @@ export default function App() {
             {tab === "live" && position && (
               <Marker position={position} icon={markerIcon}>
                 <Popup>
-                  Lat: {position[0].toFixed(6)}
-                  <br />
+                  Lat: {position[0].toFixed(6)}<br />
                   Lng: {position[1].toFixed(6)}
                 </Popup>
               </Marker>
             )}
-
             {tab === "live" && path.length > 1 && (
               <Polyline positions={path} />
             )}
@@ -328,23 +361,15 @@ export default function App() {
             {tab === "history" && histPath.length > 1 && (
               <>
                 <Polyline positions={histPath} />
-
                 <Marker position={histPath[0]} icon={startIcon}>
                   <Popup>Inicio del recorrido</Popup>
                 </Marker>
-
-                <Marker
-                  position={histPath[histPath.length - 1]}
-                  icon={endIcon}
-                >
+                <Marker position={histPath[histPath.length - 1]} icon={endIcon}>
                   <Popup>Fin del recorrido</Popup>
                 </Marker>
-
                 {stops.map((s, i) => (
                   <Marker key={i} position={[s.lat, s.lng]} icon={stopIcon}>
-                    <Popup>
-                      Detenido {(s.time / 60).toFixed(1)} min
-                    </Popup>
+                    <Popup>Detenido {(s.time / 60).toFixed(1)} min</Popup>
                   </Marker>
                 ))}
               </>
