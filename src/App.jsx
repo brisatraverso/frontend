@@ -88,17 +88,28 @@ function haversine(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.asin(Math.sqrt(a));
 }
 
+// ── Helper notificaciones push ────────────────────────────
+function mostrarNotificacion(titulo, cuerpo) {
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  new Notification(titulo, {
+    body: cuerpo,
+    icon: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
+    tag:  "gps-tracker"
+  });
+}
+
 export default function App() {
   const isDesktop = useMediaQuery("(min-width:900px)");
 
-  const [user, setUser]       = useState(undefined);
-  const [screen, setScreen]   = useState("login");
-  const [tab, setTab]         = useState("live");
+  const [user, setUser]     = useState(undefined);
+  const [screen, setScreen] = useState("login");
+  const [tab, setTab]       = useState("live");
 
-  const [position, setPosition]   = useState(null);
-  const [path, setPath]           = useState([]);
-  const [histPath, setHistPath]   = useState([]);
-  const [stops, setStops]         = useState([]);
+  const [position, setPosition] = useState(null);
+  const [path, setPath]         = useState([]);
+  const [histPath, setHistPath] = useState([]);
+  const [stops, setStops]       = useState([]);
 
   const [totalDist, setTotalDist]               = useState(0);
   const [velMax, setVelMax]                     = useState(0);
@@ -106,17 +117,23 @@ export default function App() {
   const [tiempoMovimiento, setTiempoMovimiento] = useState(0);
   const [tiempoDetenido, setTiempoDetenido]     = useState(0);
 
-  const [showStats, setShowStats]           = useState(false);
+  const [showStats, setShowStats]             = useState(false);
   const [showHistoryList, setShowHistoryList] = useState(false);
 
-  // ── Refs para acumular valores en el listener EN VIVO ──
-  // (no causan re-renders innecesarios)
+  // ── Refs para acumular valores sin causar re-renders ──
   const prevPointRef     = useRef(null);
   const prevTimestampRef = useRef(null);
   const acumDistRef      = useRef(0);
   const acumVelsRef      = useRef([]);
   const acumMovRef       = useRef(0);
   const acumStopRef      = useRef(0);
+
+  // ── Pedir permiso de notificaciones al montar ─────────
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
 
@@ -151,6 +168,9 @@ export default function App() {
     acumMovRef.current       = 0;
     acumStopRef.current      = 0;
 
+    // null → no inicializado | "movimiento" | "quieto"
+    let estadoAnterior = null;
+
     return onValue(ref(db, "vehiculo1"), snap => {
       const d = snap.val();
       if (!d?.lat || !d?.lng) return;
@@ -161,27 +181,46 @@ export default function App() {
 
       const now = d.timestamp || Date.now();
 
+      // ── Detectar movimiento por acelerómetro ─────────
+      const esMovimiento = d.ax !== undefined
+        ? Math.abs(Math.sqrt(d.ax ** 2 + d.ay ** 2 + d.az ** 2) - 9.8) > 0.5
+        : true; // si no hay datos del acelerómetro, asumir movimiento
+
+      const estadoActual = esMovimiento ? "movimiento" : "quieto";
+
+      // Notificar solo si el estado cambió y no es la primera lectura
+      if (estadoAnterior !== null && estadoAnterior !== estadoActual) {
+        if (estadoActual === "movimiento") {
+          mostrarNotificacion(
+            "🚗 Vehículo en movimiento",
+            "El vehículo comenzó a moverse."
+          );
+        }
+        if (estadoActual === "quieto") {
+          mostrarNotificacion(
+            "🅿️ Vehículo detenido",
+            "El vehículo se detuvo."
+          );
+        }
+      }
+      estadoAnterior = estadoActual;
+
+      // ── Calcular estadísticas en tiempo real ─────────
       if (prevPointRef.current && prevTimestampRef.current) {
         const [prevLat, prevLng] = prevPointRef.current;
-
-        // Distancia entre punto anterior y actual (metros)
         const dist = haversine(prevLat, prevLng, d.lat, d.lng);
         acumDistRef.current += dist;
         setTotalDist(acumDistRef.current / 1000);
 
-        // Tiempo transcurrido en segundos
         const dt = (now - prevTimestampRef.current) / 1000;
-
-        if (dt > 0 && dt < 300) { // ignorar saltos > 5 min
-          const vel = (dist / dt) * 3.6; // km/h
-
+        if (dt > 0 && dt < 300) {
+          const vel = (dist / dt) * 3.6;
           acumVelsRef.current.push(vel);
           setVelMax(v => Math.max(v, vel));
           setVelProm(
             acumVelsRef.current.reduce((a, b) => a + b, 0) /
             acumVelsRef.current.length
           );
-
           if (vel > 2) {
             acumMovRef.current += dt;
           } else {
@@ -215,8 +254,8 @@ export default function App() {
       let mov  = 0;
       let stop = 0;
 
-      let currentStop    = null;
-      let detectedStops  = [];
+      let currentStop   = null;
+      let detectedStops = [];
 
       for (let i = 1; i < puntos.length; i++) {
         const d = haversine(
@@ -302,11 +341,11 @@ export default function App() {
         {showStats && (
           <Box sx={{ width: 300, bgcolor: "#0f172a", p: 2 }}>
             {[
-              ["Distancia",   `${totalDist.toFixed(2)} km`],
-              ["Vel máx",     `${velMax.toFixed(1)} km/h`],
-              ["Vel prom",    `${velProm.toFixed(1)} km/h`],
-              ["Movimiento",  `${(tiempoMovimiento / 60).toFixed(1)} min`],
-              ["Detenido",    `${(tiempoDetenido / 60).toFixed(1)} min`]
+              ["Distancia",  `${totalDist.toFixed(2)} km`],
+              ["Vel máx",    `${velMax.toFixed(1)} km/h`],
+              ["Vel prom",   `${velProm.toFixed(1)} km/h`],
+              ["Movimiento", `${(tiempoMovimiento / 60).toFixed(1)} min`],
+              ["Detenido",   `${(tiempoDetenido / 60).toFixed(1)} min`]
             ].map(([t, v]) => (
               <Card key={t} sx={{ bgcolor: "#1f2937", mb: 1 }}>
                 <CardContent>
