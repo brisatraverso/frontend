@@ -34,7 +34,8 @@ import {
 } from "@mui/material";
 
 /* ================= CONFIG ================= */
-const MIN_STOP_TIME = 120;
+const MIN_STOP_TIME   = 120;
+const STOP_TIMEOUT_MS = 15000; // ms sin datos para considerar vehículo detenido
 
 /* ================= ICONOS ================= */
 const markerIcon = new L.Icon({
@@ -127,6 +128,8 @@ export default function App() {
   const acumVelsRef      = useRef([]);
   const acumMovRef       = useRef(0);
   const acumStopRef      = useRef(0);
+  const stopTimerRef     = useRef(null);  // timer para detección de parada
+  const estadoRef        = useRef(null);  // "movimiento" | "quieto" | null
 
   // ── Pedir permiso de notificaciones al montar ─────────
   useEffect(() => {
@@ -167,11 +170,15 @@ export default function App() {
     acumVelsRef.current      = [];
     acumMovRef.current       = 0;
     acumStopRef.current      = 0;
+    estadoRef.current        = null;
 
-    // null → no inicializado | "movimiento" | "quieto"
-    let estadoAnterior = null;
+    // Limpiar timer si quedó de sesión anterior
+    if (stopTimerRef.current) {
+      clearTimeout(stopTimerRef.current);
+      stopTimerRef.current = null;
+    }
 
-    return onValue(ref(db, "vehiculo1"), snap => {
+    const unsubscribe = onValue(ref(db, "vehiculo1"), snap => {
       const d = snap.val();
       if (!d?.lat || !d?.lng) return;
 
@@ -181,34 +188,28 @@ export default function App() {
 
       const now = d.timestamp || Date.now();
 
-      // ── Detectar movimiento por acelerómetro ─────────
-      const esMovimiento = d.ax !== undefined
-        ? Math.abs(Math.sqrt(d.ax ** 2 + d.ay ** 2 + d.az ** 2) - 9.8) > 0.5
-        : true; // si no hay datos del acelerómetro, asumir movimiento
+      // ── Cada dato que llega = movimiento ─────────────
+      // Notificar solo si venía de estado quieto o es la primera vez
+      if (estadoRef.current === "quieto") {
+        mostrarNotificacion(
+          "🚗 Vehículo en movimiento",
+          "El vehículo comenzó a moverse."
+        );
+      }
+      estadoRef.current = "movimiento";
 
-      const estadoActual = esMovimiento ? "movimiento" : "quieto";
-
-      // Notificar solo si el estado cambió y no es la primera lectura
-      if (estadoAnterior !== null && estadoAnterior !== estadoActual) {
-        if (estadoActual === "movimiento") {
-          mostrarNotificacion(
-            "🚗 Vehículo en movimiento",
-            "El vehículo comenzó a moverse."
-          );
-        }
-        if (estadoActual === "quieto") {
+      // ── Reiniciar timer de parada ─────────────────────
+      // Si no llega ningún dato en STOP_TIMEOUT_MS → vehículo detenido
+      if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
+      stopTimerRef.current = setTimeout(() => {
+        if (estadoRef.current === "movimiento") {
           mostrarNotificacion(
             "🅿️ Vehículo detenido",
             "El vehículo se detuvo."
           );
+          estadoRef.current = "quieto";
         }
-      }
-      estadoAnterior = estadoActual;
-
-      // DEBUG — borrar después de confirmar que funciona
-console.log("Estado actual:", estadoActual, "| Estado anterior:", estadoAnterior);
-console.log("ax:", d.ax, "ay:", d.ay, "az:", d.az);
-console.log("Permiso notificaciones:", Notification.permission);
+      }, STOP_TIMEOUT_MS);
 
       // ── Calcular estadísticas en tiempo real ─────────
       if (prevPointRef.current && prevTimestampRef.current) {
@@ -239,6 +240,15 @@ console.log("Permiso notificaciones:", Notification.permission);
       prevPointRef.current     = pos;
       prevTimestampRef.current = now;
     });
+
+    // Limpiar listener y timer al salir de EN VIVO
+    return () => {
+      unsubscribe();
+      if (stopTimerRef.current) {
+        clearTimeout(stopTimerRef.current);
+        stopTimerRef.current = null;
+      }
+    };
   }, [tab]);
 
   /* ================= HISTORIAL ================= */
