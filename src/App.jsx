@@ -35,7 +35,7 @@ import {
 
 /* ================= CONFIG ================= */
 const MIN_STOP_TIME   = 120;
-const STOP_TIMEOUT_MS = 15000; // ms sin datos para considerar vehículo detenido
+const STOP_TIMEOUT_MS = 15000;
 
 /* ================= ICONOS ================= */
 const markerIcon = new L.Icon({
@@ -91,8 +91,16 @@ function haversine(lat1, lon1, lat2, lon2) {
 
 // ── Helper notificaciones push ────────────────────────────
 function mostrarNotificacion(titulo, cuerpo) {
-  if (!("Notification" in window)) return;
-  if (Notification.permission !== "granted") return;
+  console.log("[NOTIF] Intentando mostrar:", titulo);
+  if (!("Notification" in window)) {
+    console.log("[NOTIF] API no disponible en este navegador");
+    return;
+  }
+  if (Notification.permission !== "granted") {
+    console.log("[NOTIF] Permiso no otorgado:", Notification.permission);
+    return;
+  }
+  console.log("[NOTIF] Mostrando notificación:", titulo);
   new Notification(titulo, {
     body: cuerpo,
     icon: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
@@ -129,12 +137,15 @@ export default function App() {
   const acumMovRef       = useRef(0);
   const acumStopRef      = useRef(0);
   const stopTimerRef     = useRef(null);
-  const estadoRef        = useRef(null); // null | "movimiento" | "quieto"
+  const estadoRef        = useRef(null);
 
   // ── Pedir permiso de notificaciones al montar ─────────
   useEffect(() => {
+    console.log("[APP] Montada. Permiso notificaciones:", Notification.permission);
     if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
+      Notification.requestPermission().then(p =>
+        console.log("[APP] Permiso otorgado:", p)
+      );
     }
   }, []);
 
@@ -163,6 +174,8 @@ export default function App() {
   useEffect(() => {
     if (tab !== "live") return;
 
+    console.log("[LIVE] Iniciando listener Firebase...");
+
     // Resetear todo al entrar a EN VIVO
     prevPointRef.current     = null;
     prevTimestampRef.current = null;
@@ -178,8 +191,12 @@ export default function App() {
     }
 
     const unsubscribe = onValue(ref(db, "vehiculo1"), snap => {
+      console.log("[FIREBASE] Update recibido:", snap.val());
       const d = snap.val();
-      if (!d?.lat || !d?.lng) return;
+      if (!d?.lat || !d?.lng) {
+        console.log("[FIREBASE] Dato inválido, ignorando");
+        return;
+      }
 
       const pos = [d.lat, d.lng];
       setPosition(pos);
@@ -187,9 +204,11 @@ export default function App() {
 
       const now = d.timestamp || Date.now();
 
-      // ── Notificar si el estado NO era movimiento ──────
-      // Cubre tanto null (primera lectura) como "quieto" (reanudó marcha)
+      // ── Detectar cambio de estado ─────────────────────
+      console.log("[ESTADO] Estado anterior:", estadoRef.current);
+
       if (estadoRef.current !== "movimiento") {
+        console.log("[ESTADO] Cambio a movimiento → disparando notificación");
         mostrarNotificacion(
           "🚗 Vehículo en movimiento",
           "El vehículo comenzó a moverse."
@@ -200,6 +219,7 @@ export default function App() {
       // ── Reiniciar timer de parada ─────────────────────
       if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
       stopTimerRef.current = setTimeout(() => {
+        console.log("[TIMER] Sin datos por 15s → vehículo detenido");
         if (estadoRef.current === "movimiento") {
           mostrarNotificacion(
             "🅿️ Vehículo detenido",
@@ -239,8 +259,8 @@ export default function App() {
       prevTimestampRef.current = now;
     });
 
-    // Limpiar listener y timer al salir de EN VIVO
     return () => {
+      console.log("[LIVE] Limpiando listener y timer");
       unsubscribe();
       if (stopTimerRef.current) {
         clearTimeout(stopTimerRef.current);
