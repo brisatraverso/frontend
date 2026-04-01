@@ -35,7 +35,7 @@ import {
 
 /* ================= CONFIG ================= */
 const MIN_STOP_TIME   = 120;
-const STOP_TIMEOUT_MS = 15000; // ms sin datos para considerar vehículo detenido
+const STOP_TIMEOUT_MS = 20000; // ms sin datos para considerar vehículo detenido
 
 /* ================= ICONOS ================= */
 const markerIcon = new L.Icon({
@@ -210,11 +210,6 @@ export default function App() {
           estadoRef.current = "quieto";
         }
       }, STOP_TIMEOUT_MS);
-
-      // DEBUG — borrar después de confirmar que funciona
-      console.log("Estado actual:", estadoActual, "| Estado anterior:", estadoAnterior);
-      console.log("ax:", d.ax, "ay:", d.ay, "az:", d.az);
-      console.log("Permiso notificaciones:", Notification.permission);
 
       // ── Calcular estadísticas en tiempo real ─────────
       if (prevPointRef.current && prevTimestampRef.current) {
