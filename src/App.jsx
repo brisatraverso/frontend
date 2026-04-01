@@ -205,6 +205,11 @@ export default function App() {
       }
       estadoAnterior = estadoActual;
 
+      // DEBUG — borrar después de confirmar que funciona
+console.log("Estado actual:", estadoActual, "| Estado anterior:", estadoAnterior);
+console.log("ax:", d.ax, "ay:", d.ay, "az:", d.az);
+console.log("Permiso notificaciones:", Notification.permission);
+
       // ── Calcular estadísticas en tiempo real ─────────
       if (prevPointRef.current && prevTimestampRef.current) {
         const [prevLat, prevLng] = prevPointRef.current;
