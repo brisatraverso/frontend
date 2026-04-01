@@ -35,7 +35,7 @@ import {
 
 /* ================= CONFIG ================= */
 const MIN_STOP_TIME   = 120;
-const STOP_TIMEOUT_MS = 20000; // ms sin datos para considerar vehículo detenido
+const STOP_TIMEOUT_MS = 15000; // ms sin datos para considerar vehículo detenido
 
 /* ================= ICONOS ================= */
 const markerIcon = new L.Icon({
@@ -121,15 +121,15 @@ export default function App() {
   const [showStats, setShowStats]             = useState(false);
   const [showHistoryList, setShowHistoryList] = useState(false);
 
-  // ── Refs para acumular valores sin causar re-renders ──
+  // ── Refs ──────────────────────────────────────────────
   const prevPointRef     = useRef(null);
   const prevTimestampRef = useRef(null);
   const acumDistRef      = useRef(0);
   const acumVelsRef      = useRef([]);
   const acumMovRef       = useRef(0);
   const acumStopRef      = useRef(0);
-  const stopTimerRef     = useRef(null);  // timer para detección de parada
-  const estadoRef        = useRef(null);  // "movimiento" | "quieto" | null
+  const stopTimerRef     = useRef(null);
+  const estadoRef        = useRef(null); // null | "movimiento" | "quieto"
 
   // ── Pedir permiso de notificaciones al montar ─────────
   useEffect(() => {
@@ -163,7 +163,7 @@ export default function App() {
   useEffect(() => {
     if (tab !== "live") return;
 
-    // Resetear acumuladores al entrar a EN VIVO
+    // Resetear todo al entrar a EN VIVO
     prevPointRef.current     = null;
     prevTimestampRef.current = null;
     acumDistRef.current      = 0;
@@ -172,7 +172,6 @@ export default function App() {
     acumStopRef.current      = 0;
     estadoRef.current        = null;
 
-    // Limpiar timer si quedó de sesión anterior
     if (stopTimerRef.current) {
       clearTimeout(stopTimerRef.current);
       stopTimerRef.current = null;
@@ -188,9 +187,9 @@ export default function App() {
 
       const now = d.timestamp || Date.now();
 
-      // ── Cada dato que llega = movimiento ─────────────
-      // Notificar solo si venía de estado quieto o es la primera vez
-      if (estadoRef.current === "quieto") {
+      // ── Notificar si el estado NO era movimiento ──────
+      // Cubre tanto null (primera lectura) como "quieto" (reanudó marcha)
+      if (estadoRef.current !== "movimiento") {
         mostrarNotificacion(
           "🚗 Vehículo en movimiento",
           "El vehículo comenzó a moverse."
@@ -199,7 +198,6 @@ export default function App() {
       estadoRef.current = "movimiento";
 
       // ── Reiniciar timer de parada ─────────────────────
-      // Si no llega ningún dato en STOP_TIMEOUT_MS → vehículo detenido
       if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
       stopTimerRef.current = setTimeout(() => {
         if (estadoRef.current === "movimiento") {
