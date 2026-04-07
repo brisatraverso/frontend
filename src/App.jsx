@@ -89,23 +89,39 @@ function haversine(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.asin(Math.sqrt(a));
 }
 
-// ── Helper notificaciones push ────────────────────────────
-function mostrarNotificacion(titulo, cuerpo) {
-  console.log("[NOTIF] Intentando mostrar:", titulo);
-  if (!("Notification" in window)) {
-    console.log("[NOTIF] API no disponible en este navegador");
+// ── Registrar Service Worker ──────────────────────────────
+async function registrarSW() {
+  if (!("serviceWorker" in navigator)) {
+    console.log("[SW] No soportado en este navegador");
     return;
   }
+  try {
+    const reg = await navigator.serviceWorker.register("/sw.js");
+    console.log("[SW] Registrado:", reg.scope);
+  } catch (e) {
+    console.error("[SW] Error al registrar:", e);
+  }
+}
+
+// ── Mostrar notificación via Service Worker ───────────────
+async function mostrarNotificacion(titulo, cuerpo) {
+  console.log("[NOTIF] Intentando:", titulo);
+  if (!("serviceWorker" in navigator)) return;
   if (Notification.permission !== "granted") {
-    console.log("[NOTIF] Permiso no otorgado:", Notification.permission);
+    console.log("[NOTIF] Sin permiso:", Notification.permission);
     return;
   }
-  console.log("[NOTIF] Mostrando notificación:", titulo);
-  new Notification(titulo, {
-    body: cuerpo,
-    icon: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-    tag:  "gps-tracker"
-  });
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification(titulo, {
+      body: cuerpo,
+      icon: "/favicon.ico",
+      tag:  "gps-tracker"
+    });
+    console.log("[NOTIF] Mostrada:", titulo);
+  } catch (e) {
+    console.error("[NOTIF] Error:", e);
+  }
 }
 
 export default function App() {
@@ -139,14 +155,17 @@ export default function App() {
   const stopTimerRef     = useRef(null);
   const estadoRef        = useRef(null);
 
-  // ── Pedir permiso de notificaciones al montar ─────────
+  // ── Inicializar SW y pedir permiso al montar ──────────
   useEffect(() => {
-    console.log("[APP] Montada. Permiso notificaciones:", Notification.permission);
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission().then(p =>
-        console.log("[APP] Permiso otorgado:", p)
-      );
-    }
+    const init = async () => {
+      console.log("[APP] Permiso notificaciones:", Notification.permission);
+      if ("Notification" in window && Notification.permission === "default") {
+        const p = await Notification.requestPermission();
+        console.log("[APP] Permiso otorgado:", p);
+      }
+      await registrarSW();
+    };
+    init();
   }, []);
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
@@ -176,7 +195,6 @@ export default function App() {
 
     console.log("[LIVE] Iniciando listener Firebase...");
 
-    // Resetear todo al entrar a EN VIVO
     prevPointRef.current     = null;
     prevTimestampRef.current = null;
     acumDistRef.current      = 0;
@@ -191,12 +209,8 @@ export default function App() {
     }
 
     const unsubscribe = onValue(ref(db, "vehiculo1"), snap => {
-      console.log("[FIREBASE] Update recibido:", snap.val());
       const d = snap.val();
-      if (!d?.lat || !d?.lng) {
-        console.log("[FIREBASE] Dato inválido, ignorando");
-        return;
-      }
+      if (!d?.lat || !d?.lng) return;
 
       const pos = [d.lat, d.lng];
       setPosition(pos);
@@ -204,11 +218,9 @@ export default function App() {
 
       const now = d.timestamp || Date.now();
 
-      // ── Detectar cambio de estado ─────────────────────
-      console.log("[ESTADO] Estado anterior:", estadoRef.current);
-
+      // ── Notificar cambio de estado ────────────────────
+      console.log("[ESTADO] Anterior:", estadoRef.current);
       if (estadoRef.current !== "movimiento") {
-        console.log("[ESTADO] Cambio a movimiento → disparando notificación");
         mostrarNotificacion(
           "🚗 Vehículo en movimiento",
           "El vehículo comenzó a moverse."
@@ -216,10 +228,10 @@ export default function App() {
       }
       estadoRef.current = "movimiento";
 
-      // ── Reiniciar timer de parada ─────────────────────
+      // ── Timer de parada ───────────────────────────────
       if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
       stopTimerRef.current = setTimeout(() => {
-        console.log("[TIMER] Sin datos por 15s → vehículo detenido");
+        console.log("[TIMER] Sin datos por 15s → detenido");
         if (estadoRef.current === "movimiento") {
           mostrarNotificacion(
             "🅿️ Vehículo detenido",
@@ -229,7 +241,7 @@ export default function App() {
         }
       }, STOP_TIMEOUT_MS);
 
-      // ── Calcular estadísticas en tiempo real ─────────
+      // ── Estadísticas en tiempo real ───────────────────
       if (prevPointRef.current && prevTimestampRef.current) {
         const [prevLat, prevLng] = prevPointRef.current;
         const dist = haversine(prevLat, prevLng, d.lat, d.lng);
@@ -260,7 +272,6 @@ export default function App() {
     });
 
     return () => {
-      console.log("[LIVE] Limpiando listener y timer");
       unsubscribe();
       if (stopTimerRef.current) {
         clearTimeout(stopTimerRef.current);
